@@ -1,0 +1,83 @@
+通过JavaScript编写函数planPathToTarget：
+/**
+ * 规划到目标载具的最短路径，参数：
+ * @param {Ref} tree_data - 科技树数据
+ * @param {string} target_data_unit_id - 目标载具
+ * @param {string[]} preset_data_unit_ids - 指定用于凑数的高级载具
+ * @param {function} instantCaching - 最后的回调
+ * @param {Ref} t_c - 国家/阵营
+ * @param {Ref} type - 军种
+ * 调用示例：planPathToTarget({
+    tree_data,
+    target_data_unit_id: "sw_strv_122b_plus",
+    preset_data_unit_ids: ["sw_cv_90105_tml", "sw_leopard_1a5no"],
+    t_c: currentCountry,
+    type: currentVehicleType,
+    instantCaching,
+  })
+ */
+
+- 根据整个tree_data，规划出选中到该目标载具的最短路线，路线中每个选中的载具selected字段均赋值为true，同时相对应更新rank下的selected字段
+  - 每个rank下都有一个字段unlock_quantity，它表示到达下一级需要选中多少个本级载具（包括普通载具researchable_vehicles和高级载具premium_vehicles）
+  - 普通载具的每一列都是一条依赖线，示例：选中等级为7级的第一列中的第一个载具需要先选中上一级中同一列的最后一个载具
+  - 当一个item的type为"multiple"时，表示不是一个有效的item，它表示"组"，并且它具备items字段，而items字段是个数组，这个数组中的每个子项才是真正的item，并且items数组中的item也具有依赖关系，示例：选中items下的第二个item需要先选中其上一个item，而选中items下的第一个item则需要选中这个"组"的上一个item
+  - 举例说明：普通载具完整的第一列对应到tree_data下每一个rank中researchable_vehicles数组的第一个数组
+    - researchable_vehicles是个二维数组，其下每个数组表示当前等级的第几列，比如其下第一个数组也就是当前等级的第一列
+  - 同列依赖顺序关系：要选中一个item时必须要先选中同在一列的上一个载具（可能会跨级）
+  - unlock_quantity的另外补充说明：并不是每一个等级都需要严格按照unlock_quantity规定的数量来，有的时候需要选中的数量可能会大于unlock_quantity，等级越低，这种现象越容易出现。
+  - 或者你可以尝试从目标载具自身出发，逆向规划（这只是我的提议），也就是从高等级向低等级逆向延伸，这样可以更好的进行决策。当不满足unlock_quantity时开辟周边的列进行补充以达到unlock_quantity的要求，但是你也许会遇到这样的情况（假设你以逆向规划的方式）：
+    - 新开的列可能载具较少，还是无法满足unlock_quantity，此时你又会继续开辟周边的列，最终你达到了unlock_quantity的要求，但之前开的列加上新开的列加起来的载具数量已经超出了unlock_quantity，这在情况在等级越高的列中影响越大，因为这是规划最短路线，多出的载具最终会导致额外的rp/sp开销，因此你可能需要剪除不必要的列或者不必要的载具，以达成最完美的结果
+  - 严格来讲，这是一个动态规划问题，你需要在规划的过程中灵活的新增或去除某些已选项，在不断尝试下找出真正的最短路线
+  - 在规划路径的过程中，preset_data_unit_ids参数指定的载具是必须要选中的，高级载具不存在依赖顺序关系，只有普通载具有，高级载具本身就是用来凑数的，并且高级载具不参与到算法的规划过程，除了preset_data_unit_ids中指定的那些高级载具，你可以理解为高级载具是静态不可动的，由preset_data_unit_ids参数决定选中哪些，而普通载具是动态可变的，由你决定选中哪些
+  - tree_data，t_c，type均为vue3响应式数据，需要通过.value的形式访问
+
+tree_data数据示例：const tree_data = [
+  {
+    rank: "VII", // 当前等级，这里表示7级
+    researchable_vehicles: [
+      // 普通载具
+      [ // 第一列
+        // 第一个item
+        {
+          type: "single", // item类型：single表示单个载具，multiple表示多个载具（也就是一个item里可展开多个载具）
+          title: "Garford-Beute", // 载具名称
+          vehicle_icon:
+            "https://static.encyclopedia.warthunder.com/slots/germ_garford_putilov.png", // 载具图标
+          br: null, // 载具权重，默认为空
+          rp: -1, // 研发该载具所需研发点，为0时表示该载具无需研发，为-1时表示数据未获取（因为需要通过点击去请求详情才能更新到这里），默认为-1
+          sp: 0, // 购买该载具所需银狮，为0时表示该载具无需用银狮购买，为1时表示数据未获取（同上），默认为-1
+          data_unit_id: "germ_garford_putilov", // 载具唯一标识
+          selected: false, // 载具当前选中状态，默认为false
+          class_name: "", // 当前载具的class标识（用于区分普通载具/联队载具/高级载具的底色）squad表示联队，prem表示高级，普通则为空字符串
+          main_role: "SPAA", // 当前载具的主要角色，如自行防空炮"SPAA"或者战斗机"Fighter"...
+          details: false, // 当前载具是否已获取详情
+        },
+      ],
+      [ // 第二列
+        // 第一个
+        {
+          type: "multiple",
+          title: "Garford-Beute-1/2", // 载具名称（合称）
+          vehicle_icon: "...", // 载具图标（合标）
+          selected: false, // 当前item下的载具已选中数量>=1时为true，默认为false
+          br: "", // 载具权重，默认为空字符串，这里的权重是显示当前item下的载具权重范围，比如当前item下有一个9.3和一个9.7载具时，这里显示为'9.3-9.7', 如果当前item下载具权重都一样，那么一样显示为字符串型，例如: '9.3'
+          data_unit_id: "il_magach_6a_5_group", // 组合唯一标识
+          class_name: "", // 当前组合的class标识
+          details: false, // 当前组合是否已获取详情（br）
+          items: [
+            /** ...若干个type为"single"的item */
+          ],
+        },
+      ],
+    ],
+    premium_vehicles: [
+      // 高级载具
+      // 详见researchable_vehicles
+    ],
+    selected: [
+      { data_unit_id, rp, sp },
+      { data_unit_id, rp, sp },
+    ], // 当前等级下已选中的载具（包括researchable_vehicles和premium_vehicles
+    unlock_quantity: 6, // 当前等级下需要选中的载具数量，达成这个数量后才能解锁下一级载具，如果当前已经是最后一级，这里将为0
+  },
+]

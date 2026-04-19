@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "WTSymbols";
+  src: url("/static/symbols_skyquake.bfc9728c6a6bc73f209a.ttf");
+}
+
+@font-face {
+  font-family: "amarurgt";
+  src: url("/static/amarurgt.ttf");
+}
+
+* {
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #0e1113;
+  font-family: "WTSymbols";
+  margin: 0;
+  padding: 0;
+}
+
+.public-loader {
+  width: 30px;
+  padding: 6px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #7fb2c0;
+  --_m: conic-gradient(#0000 10%, #000), linear-gradient(#000 0 0) content-box;
+  -webkit-mask: var(--_m);
+  mask: var(--_m);
+  -webkit-mask-composite: source-out;
+  mask-composite: subtract;
+  animation: l3 1s infinite linear;
+}
+.public-loader.small {
+  width: 14px;
+  padding: 2px;
+  background-color: #fff;
+}
+@keyframes l3 {
+  to {
+    transform: rotate(1turn);
+  }
+}
