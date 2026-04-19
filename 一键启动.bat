@@ -1,5 +1,9 @@
 @echo off
 cd /d %~dp0
-echo 正在启动开发环境...
+
+IF NOT EXIST node_modules (
+    echo 安装依赖中...
+    npm ci
+)
+
 npm run dev
-pause
