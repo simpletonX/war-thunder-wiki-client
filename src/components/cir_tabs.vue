@@ -6,9 +6,9 @@
         type="radio"
         :name="name"
         :id="getId(item, index)"
-        :value="item.value"
-        :checked="modelValue === item.value"
-        @change="onChange(item.value)"
+        :value="item.id"
+        :checked="modelValue == item.id"
+        @change="onChange(item)"
       />
 
       <label class="cir-tabs__t" :for="getId(item, index)" role="tab">

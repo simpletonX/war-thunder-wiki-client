@@ -1,7 +1,7 @@
 <template>
   <div class="type-tabs text-white w-full" :class="fixedClass">
     <div
-      class="type-tabs-container w-[1300px] mx-auto px-8 flex justify-between items-center"
+      class="type-tabs-container w-full px-8 flex justify-between items-center"
     >
       <div class="flex items-center">
         <div
@@ -19,21 +19,11 @@
         </div>
 
         <div class="split-line mx-[20px]"></div>
-
-        <div class="cursor-pointer flex items-center" @click="togglePointsType">
-          <!-- <span class="text-[14px] opacity-75 mr-1">指标: </span> -->
-          <div class="showtype-tab-item flex items-center">
-            <div class="text-[14px] opacity-75 mr-1">
-              {{ pointsType[pt].title }}
-            </div>
-            <img :src="`/static/outbound.svg`" class="w-[16px] opacity-55" />
-          </div>
-        </div>
       </div>
 
       <div class="flex items-center">
         <div
-          class="total-panel-bar flex justify-center items-center absolute bottom-0 left-0 w-full"
+          class="total-panel-bar flex justify-center items-center absolute left-0 w-full"
         >
           <div
             class="total-panel flex justify-between items-center rounded-full py-6 pl-6 h-[46px]"
@@ -47,19 +37,16 @@
               <img :src="`/static/war-points.svg`" width="18" />
             </div>
             <div class="show-mode ml-6 mr-[6px]">
-              <cir_tabs :options="pointsType" @change="onChange" />
-
-              <!-- <div class="showtype-tab-item flex items-center">
-              <div class="text-[14px] opacity-75 mr-1">
-                {{ pointsType[pt].title }}
-              </div>
-              <img :src="`/static/outbound.svg`" class="w-[16px] opacity-55" />
-            </div> -->
+              <cir_tabs
+                :modelValue="pt"
+                :options="pointsType"
+                @change="togglePointsType"
+              />
             </div>
           </div>
         </div>
 
-        <div class="cursor-pointer flex items-center mr-5">
+        <div class="cursor-pointer flex items-center mr-7">
           <light_checkbox :checked="totalSelectNum" @_click="toggleSelectAll" />
         </div>
 
@@ -67,30 +54,27 @@
           class="cursor-pointer flex items-center mr-5"
           @click="setting_visible = true"
         >
-          <img :src="`/static/settings.svg`" class="w-[26px]" />
-          <!-- <span class="text-[14px] opacity-75 ml-1">设置</span> -->
+          <!-- <img :src="`/static/settings.svg`" class="w-[22px]" /> -->
+          <div class="cirle bg-[#ff5f58]"></div>
+          <span class="text-[14px] ml-1">偏好设置</span>
         </div>
 
-        <!-- <div
-          class="cursor-pointer flex items-center mr-5"
-          @click="exportToImage"
-        >
-          <img :src="`/static/local.svg`" class="w-[16px] opacity-55" />
-          <span class="text-[14px] opacity-75 ml-1">导出图像</span>
-        </div> -->
-
-        <!-- <light_button :glowColor="red" /> -->
+        <div class="cursor-pointer flex items-center mr-5" @click="exportToImage">
+          <!-- <img :src="`/static/local.svg`" class="w-[16px]" /> -->
+          <div class="cirle bg-[#ffbc2e]"></div>
+          <span class="text-[14px] ml-1">导出图像</span>
+        </div>
         <div class="cursor-pointer flex items-center mr-5" @click="clearCache">
-          
-          <!-- <img :src="`/static/clear_cache.svg`" class="w-[18px] opacity-55" />
-          <span class="text-[15px] opacity-75 ml-1">缓存修复</span> -->
+          <!-- <img :src="`/static/clear_cache.svg`" class="w-[18px]" /> -->
+          <div class="cirle bg-[#28c840]"></div>
+          <span class="text-[14px] ml-1">缓存修复</span>
         </div>
 
         <button class="cir-btn" type="button">
-          有问题？加入群聊反馈
+          <span class="text-[14px]">有问题？加入群聊反馈</span>
           <svg
             class="cir-btn__arrow"
-            viewBox="0 0 24 24"
+            viewBox="0 0 23 23"
             fill="none"
             stroke="currentColor"
             stroke-width="2"
@@ -147,7 +131,7 @@ const setting_visible = ref(false);
 
 const props = defineProps({
   vt: String, // 当前军种类型
-  pt: String, // 当前点数（指标）类型"Battle Rating", "Research", "Purchase"
+  pt: String, // 点数信息显示类型（pointsType）
   totalSummary: String,
   totalSelectNum: Number,
 });
@@ -193,19 +177,14 @@ function toggleAllSelectModeVisible(event) {
 }
 
 const pointsType = [
-  { title: "战斗权重", us_text: "Battle Rating", id: 0 },
   { title: "研发点数", us_text: "Research", id: 1 },
+  { title: "战斗权重", us_text: "Battle Rating", id: 0 },
   { title: "银狮", us_text: "Purchase", id: 2 },
 ];
-function togglePointsType() {
-  let currentPointsType = props.pt;
-  if (currentPointsType == pointsType.length - 1) {
-    currentPointsType = "0";
-  } else {
-    currentPointsType++;
-  }
-  emit("update:pt", currentPointsType);
-  localStorage.setItem("currentPointsType", currentPointsType);
+// 切换点数信息显示类型（pointsType）
+function togglePointsType({ id }) {
+  emit("update:pt", id);
+  localStorage.setItem("currentPointsType", id);
 }
 
 function toggleVehicleType(item) {
@@ -222,7 +201,8 @@ function clearCache() {
 }
 
 function exportToImage() {
-  emit("exportToImage");
+  alert("导出图像功能维护中，敬请期待！");
+  // emit("exportToImage");
 }
 
 const fixedClass = ref("");
@@ -249,6 +229,22 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.cirle {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.total-panel-bar {
+  bottom: 50px;
+}
+
+/* @media (max-height: 779px) {
+  .total-panel-bar {
+    bottom: 50px;
+  }
+} */
+
 .total-panel {
   background-color: rgba(69, 92, 100, 0.25);
   backdrop-filter: blur(10px);
@@ -295,9 +291,11 @@ onUnmounted(() => {
   border-bottom: 3px solid transparent;
   transition: 0.2s;
   user-select: none;
+  padding: 8px 16px 5px;
+  border-radius: 10px;
 }
 .type-tab-item.active {
-  opacity: 1;
+  background: #202733;
 }
 .bottom-line {
   width: 100%;

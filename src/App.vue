@@ -150,11 +150,11 @@
       </div>
 
       <div
-        class="blank-fill z-10 relative w-full flex justify-center mt-[160px]"
+        class="blank-fill z-10 relative w-full flex justify-center pt-[200px]"
         v-else
       >
         <img :src="`/static/unlink.svg`" class="w-[18px] mr-2" />
-        <span class="opacity-50 mt-1">This technology tree has no data.</span>
+        <span class="opacity-50 mt-1">该类型科技树暂无数据</span>
       </div>
 
       <!-- 国家切换tab栏 -->
@@ -166,7 +166,9 @@
   <public_message_dialog />
 
   <!-- 当前数据库更新时间与版本号 -->
-  <div class="current-database fixed bottom-2 left-[46px] text-white flex justify-center items-center text-[12px] opacity-60 w-full">
+  <div
+    class="current-database fixed bottom-2 left-[46px] text-white flex justify-center items-center text-[12px] opacity-60 w-full"
+  >
     <img :src="`/static/database-network.svg`" />
     <span class="ml-2">2.55.1.142</span>
     <span class="ml-3">-> 2026/06/11</span>
@@ -243,8 +245,15 @@ function toggleSelectAll_() {
 //   requestTreeData();
 // }
 function clearCache() {
-  clearTreeDataCache();
-  requestTreeData();
+  public_mask_store.openLoading();
+  public_mask_store.setOpacity(0.8);
+  public_mask_store.show();
+
+  setTimeout(async () => {
+    await clearTreeDataCache();
+    await requestTreeData();
+    alert("已清除历史缓存遗留！");
+  }, 600);
 }
 
 const messageStore = usePublicMessageDialogStore();
@@ -436,8 +445,7 @@ onMounted(async () => {
 <style scoped>
 .container-main {
   width: 1300px;
-  margin: 50px auto;
-  height: calc(100vh - 100px);
+  height: 100vh;
   background-image: linear-gradient(
     to bottom,
     transparent,
@@ -446,15 +454,22 @@ onMounted(async () => {
   );
   /* background-color: #fff; */
   position: relative;
-  left: 40px;
+  left: 45px;
+  --height: 90vh;
+  --top: 4vh;
+  --tree_height: calc(var(--height) - 67px);
+  margin: 0 auto !important;
+  padding-top: var(--top);
 }
 
-.content-background-promo-mask {
-  backdrop-filter: blur(60px);
+.wt-tree {
+  height: var(--tree_height);
+  /* box-shadow: 0 0 30px 2px rgba(0, 0, 0, 0.3); */
+  color: #fff;
 }
 
 .tree-area {
-  height: calc(90vh - 67px);
+  height: var(--tree_height);
   overflow: auto;
   -webkit-mask-image: linear-gradient(
     to bottom,
@@ -472,13 +487,19 @@ onMounted(async () => {
   );
 }
 
-.tree-area::-webkit-scrollbar {
-  display: none;
+@media (max-height: 779px) {
+  .container-main {
+    --top: 2vh;
+    --height: 92vh;
+  }
 }
 
-.wt-tree {
-  /* box-shadow: 0 0 30px 2px rgba(0, 0, 0, 0.3); */
-  color: #fff;
+.content-background-promo-mask {
+  backdrop-filter: blur(60px);
+}
+
+.tree-area::-webkit-scrollbar {
+  display: none;
 }
 
 .wt-tree .backdrop-filter {

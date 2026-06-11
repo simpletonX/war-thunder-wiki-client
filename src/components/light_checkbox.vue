@@ -245,7 +245,7 @@ function _click() {
   padding: 0;
 
   --size: 18px;
-  --border: 1px;
+  --border: 2px;
 }
 
 .container input {

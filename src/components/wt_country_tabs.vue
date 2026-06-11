@@ -1,6 +1,6 @@
 <template>
   <div
-    class="country-tabs absolute z-100 w-[68px] h-[800px] left-[-100px] text-white"
+    class="country-tabs absolute z-100 w-[68px] left-[-90px] text-white"
   >
     <div
       class="country-tabs-container relative h-full flex justify-center content-center flex-wrap"
@@ -51,39 +51,12 @@ function toggleCountry(item) {
   /* #171c22 */
   background-image: linear-gradient(to bottom, transparent, #171c22, transparent);
 }
-/* .country-tabs-container::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 20%;
-  width: 1px;
-  height: 60%;
-  background-image: linear-gradient(
-    to bottom,
-    transparent,
-    rgba(189, 233, 181, 0.35),
-    transparent
-  );
-}
-.country-tabs-container::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  top: 20%;
-  width: 1px;
-  height: 60%;
-  background-image: linear-gradient(
-    to bottom,
-    transparent,
-    rgba(189, 233, 181, 0.35),
-    transparent
-  );
-} */
 .country-tabs {
-  top: calc(50% - 400px);
+  top: calc(50% - 330px);
+  height: 660px;
 }
 .country-tab-item {
-  height: 54px;
+  height: 48px;
   border-bottom: 3px solid transparent;
   transition: 0.2s;
 }
@@ -93,5 +66,10 @@ function toggleCountry(item) {
 .country-tab-item.active {
   width: 200px;
   background-color: rgba(255, 255, 255, 0.2);
+}
+@media (max-height: 779px) {
+  .country-tabs {
+    height: 600px;
+  }
 }
 </style>

@@ -2,18 +2,26 @@
   <transition name="fade">
     <div
       v-if="public_mask.visible"
-      class="mask- fixed inset-0 flex items-center justify-center z-[999]"
+      class="mask- fixed inset-0 flex content-center justify-center flex-wrap z-[999]"
       :style="{
-        backgroundColor: `rgba(0,0,0,${public_mask.opacity})`,
+        '--opacity': public_mask.opacity,
       }"
       @click="public_mask.hide"
     >
-      <div class="loading-func flex items-center" v-if="public_mask.loadingFunc">
+      <div
+        class="loading-func flex items-center mt-[200px] ml-[45px]"
+        v-if="public_mask.loadingFunc"
+      >
         <div class="public-loader"></div>
         <div class="text text-[15px] text-[#7fb2c0] ml-2">
-          Waiting for server response..
+          等待服务器数据响应中..
         </div>
       </div>
+      <!-- <div class="desc w-[calc(100% - 70px)] ml-[70px] text-center px-[30%] mt-6 text-[13px] opacity-60">
+        Покорите небо, захватите землю, добро пожаловать в программу
+        исследований и разработок дерева технологий War Thunder WIKI, я — Слепой
+        Гром.
+      </div> -->
     </div>
   </transition>
 </template>
@@ -31,5 +39,14 @@ const public_mask = usePublicMaskStore();
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+.mask- {
+  background-image: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(25, 33, 36, 1) 70%,
+    rgba(25, 33, 36, 1) 90%
+  );
+  backdrop-filter: blur(100px);
 }
 </style>
