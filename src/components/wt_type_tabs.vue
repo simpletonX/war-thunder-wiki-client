@@ -1,10 +1,7 @@
 <template>
-  <div
-    class="type-tabs absolute z-100 top-0 left-0 text-white w-full"
-    :class="fixedClass"
-  >
+  <div class="type-tabs text-white w-full" :class="fixedClass">
     <div
-      class="type-tabs-container w-[1300px] h-[66px] mx-auto px-4 flex justify-between items-center"
+      class="type-tabs-container w-[1300px] mx-auto px-8 flex justify-between items-center"
     >
       <div class="flex items-center">
         <div
@@ -35,45 +32,76 @@
       </div>
 
       <div class="flex items-center">
-        <div class="flex items-center mr-6">
-          <span class="text-[14px] opacity-75 mr-1">总计: </span>
-          <span class="text-[14px] mr-[2px]">{{ totalSummary.rp }}</span>
-          <img :src="`/static/rp.svg`" width="18" />
-          <span class="text-[14px] ml-1 mr-2">/</span>
-          <span class="text-[14px] mr-[2px]">{{ totalSummary.sp }}</span>
-          <img :src="`/static/war-points.svg`" width="18" />
+        <div
+          class="total-panel-bar flex justify-center items-center absolute bottom-0 left-0 w-full"
+        >
+          <div
+            class="total-panel flex justify-between items-center rounded-full py-6 pl-6 h-[46px]"
+          >
+            <div class="flex items-center">
+              <span class="text-[14px] opacity-75 mr-2">当前总计: </span>
+              <span class="text-[14px] mr-[2px]">{{ rpNumber }}</span>
+              <img :src="`/static/rp.svg`" width="18" />
+              <span class="text-[14px] ml-1 mr-2">/</span>
+              <span class="text-[14px] mr-[2px]">{{ spNumber }}</span>
+              <img :src="`/static/war-points.svg`" width="18" />
+            </div>
+            <div class="show-mode ml-6 mr-[6px]">
+              <cir_tabs :options="pointsType" @change="onChange" />
+
+              <!-- <div class="showtype-tab-item flex items-center">
+              <div class="text-[14px] opacity-75 mr-1">
+                {{ pointsType[pt].title }}
+              </div>
+              <img :src="`/static/outbound.svg`" class="w-[16px] opacity-55" />
+            </div> -->
+            </div>
+          </div>
         </div>
 
-        <div
-          class="cursor-pointer flex items-center mr-5"
-          @click="toggleSelectAll"
-        >
-          <img :src="`/static/swtich.svg`" class="w-[16px] opacity-55" />
-          <span class="text-[14px] opacity-75 ml-[6px]">{{
-            totalSelectNum ? "取消全选" : "全选"
-          }}</span>
+        <div class="cursor-pointer flex items-center mr-5">
+          <light_checkbox :checked="totalSelectNum" @_click="toggleSelectAll" />
         </div>
 
         <div
           class="cursor-pointer flex items-center mr-5"
           @click="setting_visible = true"
         >
-          <img :src="`/static/settings.svg`" class="w-[16px] opacity-55" />
-          <span class="text-[14px] opacity-75 ml-1">设置</span>
+          <img :src="`/static/settings.svg`" class="w-[26px]" />
+          <!-- <span class="text-[14px] opacity-75 ml-1">设置</span> -->
         </div>
 
-        <div
+        <!-- <div
           class="cursor-pointer flex items-center mr-5"
           @click="exportToImage"
         >
           <img :src="`/static/local.svg`" class="w-[16px] opacity-55" />
           <span class="text-[14px] opacity-75 ml-1">导出图像</span>
+        </div> -->
+
+        <!-- <light_button :glowColor="red" /> -->
+        <div class="cursor-pointer flex items-center mr-5" @click="clearCache">
+          
+          <!-- <img :src="`/static/clear_cache.svg`" class="w-[18px] opacity-55" />
+          <span class="text-[15px] opacity-75 ml-1">缓存修复</span> -->
         </div>
 
-        <div class="cursor-pointer flex items-center mr-5" @click="clearCache">
-          <img :src="`/static/clear_cache.svg`" class="w-[16px] opacity-55" />
-          <span class="text-[14px] opacity-75 ml-1">清除缓存</span>
-        </div>
+        <button class="cir-btn" type="button">
+          有问题？加入群聊反馈
+          <svg
+            class="cir-btn__arrow"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M7 17 17 7"></path>
+            <path d="M7 7h10v10"></path>
+          </svg>
+        </button>
       </div>
     </div>
     <div class="bottom-line"></div>
@@ -102,9 +130,12 @@
 
 <script setup>
 import { vehicle_type, vehicle_type_texts } from "@/utils/dict";
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref, computed } from "vue";
 import { storeToRefs } from "pinia";
 import public_dialog from "@/components/public_dialog.vue";
+import light_checkbox from "@/components/light_checkbox.vue";
+import light_button from "@/components/light_button.vue";
+import cir_tabs from "@/components/cir_tabs.vue";
 import { useTreeDataStore } from "@/stores/tree_data";
 
 const treeDataStore = useTreeDataStore();
@@ -127,6 +158,27 @@ const emit = defineEmits([
   "clearCache",
   "exportToImage",
 ]);
+
+const formatToWan = (str) => {
+  const num = Number(String(str).replace(/,/g, "").trim());
+  if (!Number.isFinite(num)) return "0";
+
+  const result = num / 10000;
+
+  // 保留最多2位小数，但去掉末尾0
+  const formatted = result.toFixed(2).replace(/\.?0+$/, "");
+  const text = formatted > 0 ? "万" : "";
+
+  return formatted + text;
+};
+
+const rpNumber = computed(() => {
+  return formatToWan(props.totalSummary.rp);
+});
+
+const spNumber = computed(() => {
+  return formatToWan(props.totalSummary.sp);
+});
 
 function toggleBgVisible(event) {
   toggleBgHidden(event.target.checked);
@@ -162,6 +214,7 @@ function toggleVehicleType(item) {
 
 function toggleSelectAll() {
   emit("toggleSelectAll");
+  console.log(props.totalSelectNum);
 }
 
 function clearCache() {
@@ -196,20 +249,51 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.total-panel {
+  background-color: rgba(69, 92, 100, 0.25);
+  backdrop-filter: blur(10px);
+  z-index: 10;
+}
+
+.total-panel::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 10%;
+  width: 80%;
+  height: 1px;
+  background-image: linear-gradient(
+    to right,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+}
+
+.type-tabs {
+  width: 1300px;
+  margin: 0 auto;
+  /* background-image: linear-gradient(
+    to top,
+    rgba(25, 33, 36, 0.65),
+    transparent
+  ); */
+  /* border-radius: 100px; */
+  /* background-color: #293340; */
+}
 .setting-item {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 1);
   display: flex;
   flex-wrap: wrap;
   height: 40px;
 }
 .type-tabs-container {
-  border-top: 1px solid #293340;
+  height: 66px;
 }
 .type-tab-item {
   border-bottom: 3px solid transparent;
   transition: 0.2s;
-  opacity: 0.3;
   user-select: none;
 }
 .type-tab-item.active {
@@ -265,4 +349,111 @@ onUnmounted(() => {
 .logo {
   font-family: amarurgt;
 }
+
+/* 复选框 */
+/* From Uiverse.io by Nawsome */
+.clear {
+  clear: both;
+}
+
+.checkBox {
+  display: block;
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  border: 3px solid rgba(255, 255, 255, 0);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0px 0px 0px 2px #fff;
+}
+
+.checkBox div {
+  width: 60px;
+  height: 60px;
+  background-color: #fff;
+  top: -52px;
+  left: -52px;
+  position: absolute;
+  transform: rotateZ(45deg);
+  z-index: 100;
+}
+
+.checkBox input[type="checkbox"]:checked + div {
+  left: -10px;
+  top: -10px;
+}
+
+.checkBox input[type="checkbox"] {
+  position: absolute;
+  left: 50px;
+  visibility: hidden;
+}
+
+.transition {
+  transition: 300ms ease;
+}
+/* 复选框 */
+
+/* 加入群聊 */
+/* From Uiverse.io by d4niz */
+.cir-btn {
+  --ink: rgb(32, 39, 51);
+  --cloud: var(--color-cloud, #ffffff);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 42px;
+  padding: 0 20px 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--cloud);
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow:
+    0 1px 1px rgba(14, 17, 22, 0.06),
+    0 14px 28px -18px rgba(14, 17, 22, 0.4);
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cir-btn__arrow {
+  width: 16px;
+  height: 16px;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cir-btn:hover {
+  background: #1a1f28;
+  box-shadow:
+    0 1px 1px rgba(14, 17, 22, 0.08),
+    0 20px 36px -16px rgba(14, 17, 22, 0.48);
+}
+
+.cir-btn:hover .cir-btn__arrow {
+  transform: translate(2px, -2px);
+}
+
+.cir-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(46, 125, 239, 0.32),
+    0 14px 28px -18px rgba(14, 17, 22, 0.4);
+}
+
+.cir-btn:active {
+  opacity: 0.8;
+}
+/* 加入群聊 */
 </style>

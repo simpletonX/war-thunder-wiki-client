@@ -384,7 +384,7 @@ function multipleEvent({ selected, items }) {
   border: 1px solid #3d4c51;
   border-top: 2px solid #62737a;
   box-shadow: 0 2px 3px 1px rgba(0, 0, 0, 0.1);
-  background-color: #38434d;
+  background-color: rgb(56, 67, 77, 1);
   position: relative;
   user-select: none;
   top: 0;
@@ -392,21 +392,23 @@ function multipleEvent({ selected, items }) {
 }
 .wt-tree-item.select_mode {
   /* filter: brightness(50%); */
-  opacity: 0.25;
+  opacity: 0.4;
 }
 .wt-tree-item.selected {
   /* filter: brightness(100%); */
   opacity: 1;
 }
 .wt-tree-item.prem {
-  border: 1px solid #5b471f;
-  border-top: 2px solid #7b591f;
-  background-color: #3c3624;
+  border: 1px solid #57441e;
+  border-top: 2px solid #8b6626;
+  background-color: #493e1a;
+  background-image: linear-gradient(to bottom, transparent, #372f15);
 }
 .wt-tree-item.squad {
   border: 1px solid #3e5c2c;
   border-top: 2px solid #4b712f;
   background-color: #32492d;
+
 }
 .wt-tree-item::before {
   content: "";

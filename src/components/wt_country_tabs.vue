@@ -1,12 +1,12 @@
 <template>
   <div
-    class="country-tabs fixed z-100 bottom-0 left-0 flex justify-center text-white w-full"
+    class="country-tabs absolute z-100 w-[68px] h-[800px] left-[-100px] text-white"
   >
     <div
-      class="country-tabs-container w-[1300px] h-[46px] flex justify-center bg-[#171c22]"
+      class="country-tabs-container relative h-full flex justify-center content-center flex-wrap"
     >
       <div
-        class="country-tab-item flex items-center px-[15px] cursor-pointer"
+        class="country-tab-item flex items-center w-full cursor-pointer flex justify-center"
         v-for="item in country_code"
         :class="{ active: modelValue == item }"
         @click="toggleCountry(item)"
@@ -14,7 +14,7 @@
         <div class="country-icon">
           <img :src="`/static/country_ico/${item}.svg`" class="h-[18px]" />
         </div>
-        <div class="text ml-[5px] text-[14px] font-[600]">{{ country_code_texts[item] }}</div>
+        <!-- <div class="text ml-[5px] text-[14px] font-[600]">{{ country_code_texts[item] }}</div> -->
       </div>
     </div>
   </div>
@@ -48,20 +48,50 @@ function toggleCountry(item) {
 
 <style scoped>
 .country-tabs-container {
-  border-top: 1px solid #293340;
+  /* #171c22 */
+  background-image: linear-gradient(to bottom, transparent, #171c22, transparent);
+}
+/* .country-tabs-container::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 20%;
+  width: 1px;
+  height: 60%;
+  background-image: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(189, 233, 181, 0.35),
+    transparent
+  );
+}
+.country-tabs-container::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 20%;
+  width: 1px;
+  height: 60%;
+  background-image: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(189, 233, 181, 0.35),
+    transparent
+  );
+} */
+.country-tabs {
+  top: calc(50% - 400px);
 }
 .country-tab-item {
+  height: 54px;
   border-bottom: 3px solid transparent;
   transition: 0.2s;
-  opacity: 0.5;
 }
 .country-tab-item:hover {
   background-color: rgba(255, 255, 255, 0.05);
-  opacity: 1;
 }
 .country-tab-item.active {
+  width: 200px;
   background-color: rgba(255, 255, 255, 0.2);
-  border-color: #ba4f32;
-  opacity: 1;
 }
 </style>
