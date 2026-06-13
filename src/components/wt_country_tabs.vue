@@ -1,6 +1,6 @@
 <template>
   <div
-    class="country-tabs absolute z-100 w-[68px] left-[-90px] text-white"
+    class="country-tabs absolute z-100 w-[64px] left-[-90px] text-white"
   >
     <div
       class="country-tabs-container relative h-full flex justify-center content-center flex-wrap"
@@ -65,7 +65,7 @@ function toggleCountry(item) {
 }
 .country-tab-item.active {
   width: 200px;
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: #444d5d;
 }
 @media (max-height: 779px) {
   .country-tabs {

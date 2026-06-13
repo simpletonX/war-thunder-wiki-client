@@ -1,11 +1,15 @@
-import { computed, ref } from "vue";
+import { ref } from "vue";
 import { defineStore } from "pinia";
 
 export const useTreeDataStore = defineStore("tree_data", () => {
   const tree_data = ref([]);
   const bg_hidden = ref(
     Boolean(Number(localStorage.getItem("bg_hidden"))) || false,
-  );
+  ); // （旧，已弃置）
+  const bg_img = ref(localStorage.getItem("bg_img") || "default"); // 新
+
+  const blur_number = ref(localStorage.getItem("blur_number") || "60");
+
   const multiple_mode = ref(
     Boolean(Number(localStorage.getItem("multiple_mode"))) || false,
   );
@@ -26,10 +30,22 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     updateTreeData(JSON.parse(newTreeData));
   }
 
-  // 切换显示背景/隐藏背景
+  // 切换显示背景/隐藏背景（旧，已弃置）
   function toggleBgHidden(val) {
     localStorage.setItem("bg_hidden", Number(val));
     bg_hidden.value = val;
+  }
+
+  // 切换背景图像/视频（新）
+  function toggleBgImg(val) {
+    localStorage.setItem("bg_img", val);
+    bg_img.value = val;
+  }
+
+  // 设置当前背景模糊度
+  function toggleBlurNumber(val) {
+    localStorage.setItem("blur_number", val);
+    blur_number.value = val;
   }
 
   // 切换multiple载具交互模式
@@ -48,11 +64,15 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     tree_data,
     updateTreeData,
     instantCaching,
-    bg_hidden,
     multiple_mode,
-    all_select_mode,
-    toggleBgHidden,
     toggleMultipleMode,
-    toggleAllSelectMode
+    all_select_mode,
+    toggleAllSelectMode,
+    bg_hidden, // （旧，已弃置）
+    toggleBgHidden, // （旧，已弃置）
+    bg_img, // 新
+    toggleBgImg, // 新
+    blur_number,
+    toggleBlurNumber
   };
 });

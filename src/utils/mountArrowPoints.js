@@ -65,7 +65,7 @@ export async function mountArrowPoints({ tree_data, _t_c, _type, instantCaching 
         const item = col[rowIndex];
         if (!isValidResearchItem(item)) continue;
 
-        // ✅ 如果已存在 arrow_points，跳过本轮计算（性能优化）
+        // 如果已存在 arrow_points，跳过本轮计算（性能优化）
         if (item.arrow_points && typeof item.arrow_points === "object")
           continue;
 

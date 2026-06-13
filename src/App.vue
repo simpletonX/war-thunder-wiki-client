@@ -5,14 +5,22 @@
   >
     <div
       class="content-background-promo-mask w-[100vw] h-[100vh] absolute top-0 left-0"
+      :style="{
+        backdropFilter: `blur(${ blur_number }px)`
+      }"
     ></div>
     <video
-      v-if="!bg_hidden"
+      v-if="current_bg_img.type == 'video'"
       autoplay
       muted
       loop
-      :src="`/static/reel-2023.mp4`"
+      :src="current_bg_img.url"
+      class="bg-liner"
     />
+    <img v-else-if="current_bg_img.type == 'image'" :src="current_bg_img.url" class="bg-liner" />
+    <div v-else class="w-full h-full bg-liner" :style="{
+      backgroundColor: current_bg_img.color
+    }"></div>
   </div>
 
   <div class="container-main">
@@ -25,7 +33,6 @@
       :totalSelectNum="totalSelectNum"
       @toggleSelectAll="toggleSelectAll_"
       @clearCache="clearCache"
-      @exportToImage="exportToImage"
     />
 
     <!-- 科技树主体 -->
@@ -121,32 +128,6 @@
             </div>
           </div>
         </div>
-
-        <div v-show="showBottomInfo">
-          <div class="flex justify-center items-center mt-5 z-10 relative">
-            <div class="text-[14px] mr-4 opacity-50">
-              <span>{{ country_code_texts[currentCountry] }}</span>
-              <span class="mx-[2px]">·</span>
-              <span>{{ vehicle_type_texts[currentVehicleType] }}</span>
-            </div>
-            <img
-              :src="`/static/country_ico/${currentCountry}.svg`"
-              width="30"
-              class="mr-2"
-            />
-            <span class="text-[16px] opacity-75 mr-2">Total: </span>
-            <span class="text-[16px] mr-[2px]">{{ totalSummary.rp }}</span>
-            <img :src="`/static/rp.svg`" width="18" />
-            <span class="text-[16px] ml-1 mr-2">/</span>
-            <span class="text-[16px] mr-[2px]">{{ totalSummary.sp }}</span>
-            <img :src="`/static/war-points.svg`" width="18" />
-          </div>
-
-          <div class="absolute right-6 z-10 text-[14px] opacity-30">
-            © War Thunder Wiki for Blind-Thunder.
-          </div>
-          <div class="mt-8 h-[1px]"></div>
-        </div>
       </div>
 
       <div
@@ -196,23 +177,26 @@ import {
 } from "@/utils/treeDataUtils";
 import { loadLocalJSON } from "@/utils/loadLocalJson";
 import {
-  exportElementToImage,
-  downloadDataUrl,
-  modernScreenshot,
-} from "@/utils/exportElementToImage";
-import {
   unlock_quantitys,
   country_code,
   vehicle_type,
   vehicle_type_texts,
   country_code_texts,
+  preset_wallpapers,
 } from "@/utils/dict";
 
 /** stores初始化 */
 const public_mask_store = usePublicMaskStore();
 const treeDataStore = useTreeDataStore();
 const { updateTreeData, instantCaching } = treeDataStore;
-const { tree_data, bg_hidden } = storeToRefs(treeDataStore);
+const { tree_data, bg_img, blur_number } = storeToRefs(treeDataStore);
+
+const current_bg_img = computed(() => {
+  return preset_wallpapers.find((el) => el.value == bg_img.value) || {};
+});
+setTimeout(() => {
+  console.log(current_bg_img);
+}, 500);
 
 /** 当前选中的类型值（国家/军种/点数值） */
 const currentCountry = ref(localStorage.getItem("currentCountry") || "usa");
@@ -362,25 +346,6 @@ watch(
 );
 
 const treeArea = ref();
-const showBottomInfo = ref(false);
-/** 导出科技树结构为图像并触发自动下载 */
-async function exportToImage() {
-  // messageStore.show("开发试验性功能，敬请期待！", 2000);
-  // return;
-
-  showBottomInfo.value = true;
-  public_mask_store.openLoading();
-  public_mask_store.setOpacity(0.8);
-  public_mask_store.show();
-  await nextTick();
-
-  if (document.fonts) {
-    await document.fonts.ready;
-  }
-  await exportElementToImage(treeArea.value);
-  showBottomInfo.value = false;
-  public_mask_store.hide();
-}
 
 /** 动态获取当前国家/军种的unlock_quantity */
 const current_uq = computed(
@@ -443,6 +408,13 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.bg-liner {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  object-fit: cover;
+}
+
 .container-main {
   width: 1300px;
   height: 100vh;
@@ -492,10 +464,6 @@ onMounted(async () => {
     --top: 2vh;
     --height: 92vh;
   }
-}
-
-.content-background-promo-mask {
-  backdrop-filter: blur(60px);
 }
 
 .tree-area::-webkit-scrollbar {

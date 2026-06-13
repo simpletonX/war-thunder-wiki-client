@@ -29,13 +29,15 @@ function close_mask() {
   border: 1px solid #2f3942;
   box-shadow: 0 0 6px 1px rgba(0, 0, 0, 0.2);
   min-width: 360px;
+  border-radius: 10px;
 }
 .public_dialog_header {
-  padding: 0 15px 0;
-  line-height: 50px;
+  padding: 2px 22px 0;
+  line-height: 54px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: #fff;
 }
 .public_dialog_main {
-  padding: 18px 15px 12px;
+  padding: 20px 22px 12px;
 }
 </style>

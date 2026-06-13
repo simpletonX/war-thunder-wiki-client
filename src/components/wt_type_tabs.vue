@@ -23,11 +23,12 @@
 
       <div class="flex items-center">
         <div
-          class="total-panel-bar flex justify-center items-center absolute left-0 w-full"
+          class="total-panel-bar flex justify-center items-center absolute max-auto left-0 w-full"
         >
           <div
-            class="total-panel flex justify-between items-center rounded-full py-6 pl-6 h-[46px]"
+            class="total-panel flex justify-between items-center rounded-full py-6 pl-6 h-[46px] relative"
           >
+            <!-- 总计 -->
             <div class="flex items-center">
               <span class="text-[14px] opacity-75 mr-2">当前总计: </span>
               <span class="text-[14px] mr-[2px]">{{ rpNumber }}</span>
@@ -46,7 +47,7 @@
           </div>
         </div>
 
-        <div class="cursor-pointer flex items-center mr-7">
+        <div class="cursor-pointer flex items-center mr-8">
           <light_checkbox :checked="totalSelectNum" @_click="toggleSelectAll" />
         </div>
 
@@ -56,21 +57,24 @@
         >
           <!-- <img :src="`/static/settings.svg`" class="w-[22px]" /> -->
           <div class="cirle bg-[#ff5f58]"></div>
-          <span class="text-[14px] ml-1">偏好设置</span>
+          <span class="text-[14px] ml-1 mt-1">偏好设置</span>
         </div>
 
-        <div class="cursor-pointer flex items-center mr-5" @click="exportToImage">
+        <div
+          class="cursor-pointer flex items-center mr-5"
+          @click="exportToImage"
+        >
           <!-- <img :src="`/static/local.svg`" class="w-[16px]" /> -->
           <div class="cirle bg-[#ffbc2e]"></div>
-          <span class="text-[14px] ml-1">导出图像</span>
+          <span class="text-[14px] ml-1 mt-1">导出图像</span>
         </div>
         <div class="cursor-pointer flex items-center mr-5" @click="clearCache">
           <!-- <img :src="`/static/clear_cache.svg`" class="w-[18px]" /> -->
           <div class="cirle bg-[#28c840]"></div>
-          <span class="text-[14px] ml-1">缓存修复</span>
+          <span class="text-[14px] ml-1 mt-1">缓存修复</span>
         </div>
 
-        <button class="cir-btn" type="button">
+        <button class="cir-btn" type="button" @click="join_visible = true">
           <span class="text-[14px]">有问题？加入群聊反馈</span>
           <svg
             class="cir-btn__arrow"
@@ -90,44 +94,210 @@
     </div>
     <div class="bottom-line"></div>
   </div>
+
+  <!-- 偏好设置面板 -->
   <public_dialog v-model="setting_visible">
     <template #header>
       <div class="title">偏好设置</div>
     </template>
     <template #main>
-      <div class="setting-item">
-        <el-checkbox :checked="bg_hidden" @input="toggleBgVisible"
-          >隐藏背景</el-checkbox
-        >
-        <el-checkbox :checked="multiple_mode" @input="toggleMultipleModeVisible"
-          >单击选中首个折叠载具</el-checkbox
-        >
-        <el-checkbox
-          :checked="all_select_mode"
-          @input="toggleAllSelectModeVisible"
-          >全选仅选中第一个折叠载具</el-checkbox
-        >
+      <div class="setting-banner mb-5">
+        <img :src="`/static/setting-banner-2.jpg`" class="w-[440px]" />
+      </div>
+
+      <!-- 个性化配置 -->
+      <div class="personalization">
+        <div class="setting-type mb-2 relative w-full flex justify-center">
+          <div
+            class="type-line absolute w-full h-[1px] bg-gray-700 left-0 top-1/2 mt-[-1px]"
+          ></div>
+          <div
+            class="label text-gray-500 text-[14px] text-center bg-[rgb(26,38,41)] relative px-4"
+          >
+            个性化配置
+          </div>
+        </div>
+
+        <div class="setting-item flex justify-between items-center mb-2">
+          <div class="label text-[15px]">全局背景图像/视频</div>
+          <Select :modelValue="bg_img" @update:model-value="toggleBgImgVis">
+            <SelectTrigger class="max-w-[310px]">
+              <SelectValue placeholder="请选择预设壁纸" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>wallpapers</SelectLabel>
+                <SelectItem
+                  :value="item.value"
+                  v-for="item in preset_wallpapers"
+                >
+                  <div
+                    v-if="item.type == 'color'"
+                    class="cirle"
+                    :style="{
+                      backgroundColor: item.color,
+                    }"
+                  ></div>
+                  {{ item.label }}
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div class="setting-item flex justify-between items-center mb-2">
+          <div class="label text-[15px]">背景模糊度</div>
+          <NumberField :model-value="blur_number" :min="0" :max="60" @update:model-value="toggleBlurNumberVis">
+            <NumberFieldContent>
+              <NumberFieldDecrement />
+              <NumberFieldInput />
+              <NumberFieldIncrement />
+            </NumberFieldContent>
+          </NumberField>
+        </div>
+      </div>
+
+      <!-- 快捷操作 -->
+      <div class="quick-operation">
+        <div class="setting-type mb-2 relative w-full flex justify-center">
+          <div
+            class="type-line absolute w-full h-[1px] bg-gray-700 left-0 top-1/2 mt-[-1px]"
+          ></div>
+          <div
+            class="label text-gray-500 text-[14px] text-center bg-[rgb(26,38,41)] relative px-4"
+          >
+            快捷操作
+          </div>
+        </div>
+
+        <div class="setting-item flex justify-between items-center">
+          <div class="label text-[15px] flex">
+            左键单击折叠载具策略
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <PhWarningCircle :size="18" class="ml-1 opacity-60" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p>
+                    勾选后，鼠标左键单击折叠载具组时会自动选择其下第一个折叠载具
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <div class="flex items-center gap-3">
+            <Checkbox
+              id="terms"
+              :modelValue="multiple_mode"
+              @update:modelValue="toggleMultipleModeVisible"
+            />
+            <Label for="terms">单击首选折叠载具</Label>
+          </div>
+        </div>
+
+        <div class="setting-item flex justify-between items-center">
+          <div class="label text-[15px] flex">
+            全选折叠载具策略
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <PhWarningCircle :size="18" class="ml-1 opacity-60" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p>勾选后，全选载具时仅选中折叠载具组下的第一个折叠载具</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <div class="flex items-center gap-3">
+            <Checkbox
+              id="terms-2"
+              :modelValue="all_select_mode"
+              @update:modelValue="toggleAllSelectModeVisible"
+            />
+            <Label for="terms-2">全选时仅首选折叠载具</Label>
+          </div>
+        </div>
+      </div>
+    </template>
+  </public_dialog>
+  
+  <!-- 加入群聊面板 -->
+  <public_dialog v-model="join_visible">
+    <template #header>
+      <div class="title">扫码加入群聊</div>
+    </template>
+    <template #main>
+      <div class="flex items-center mb-2">
+        <div class="group-item text-center">
+          <img :src="`/static/group-1.png`" class="w-[140px]">
+          <p class="mt-4">QQ-1群</p>
+        </div>
+        <div class="group-item text-center mx-6">
+          <img :src="`/static/group-2.png`" class="w-[140px]">
+          <p class="mt-4">QQ-2群</p>
+        </div>
+        <div class="group-item text-center">
+          <img :src="`/static/group-3.png`" class="w-[140px]">
+          <p class="mt-4">QQ-3群</p>
+        </div>
       </div>
     </template>
   </public_dialog>
 </template>
 
 <script setup>
-import { vehicle_type, vehicle_type_texts } from "@/utils/dict";
+import {
+  vehicle_type,
+  vehicle_type_texts,
+  preset_wallpapers,
+} from "@/utils/dict";
 import { onMounted, onUnmounted, ref, computed } from "vue";
 import { storeToRefs } from "pinia";
 import public_dialog from "@/components/public_dialog.vue";
 import light_checkbox from "@/components/light_checkbox.vue";
-import light_button from "@/components/light_button.vue";
+// import light_button from "@/components/light_button.vue";
 import cir_tabs from "@/components/cir_tabs.vue";
 import { useTreeDataStore } from "@/stores/tree_data";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  NumberField,
+  NumberFieldContent,
+  NumberFieldDecrement,
+  NumberFieldIncrement,
+  NumberFieldInput,
+} from "@/components/ui/number-field";
+import { PhWarningCircle } from "@phosphor-icons/vue";
 
 const treeDataStore = useTreeDataStore();
-const { toggleBgHidden, toggleMultipleMode, toggleAllSelectMode } =
-  treeDataStore;
-const { bg_hidden, multiple_mode, all_select_mode } =
+const {
+  toggleBgHidden,
+  toggleMultipleMode,
+  toggleAllSelectMode,
+  toggleBgImg,
+  toggleBlurNumber,
+} = treeDataStore;
+const { bg_img, multiple_mode, all_select_mode, blur_number } =
   storeToRefs(treeDataStore);
 const setting_visible = ref(false);
+const join_visible = ref(false);
 
 const props = defineProps({
   vt: String, // 当前军种类型
@@ -168,12 +338,20 @@ function toggleBgVisible(event) {
   toggleBgHidden(event.target.checked);
 }
 
-function toggleMultipleModeVisible(event) {
-  toggleMultipleMode(event.target.checked);
+function toggleBgImgVis(val) {
+  toggleBgImg(val);
 }
 
-function toggleAllSelectModeVisible(event) {
-  toggleAllSelectMode(event.target.checked);
+function toggleMultipleModeVisible(val) {
+  toggleMultipleMode(val);
+}
+
+function toggleAllSelectModeVisible(val) {
+  toggleAllSelectMode(val);
+}
+
+function toggleBlurNumberVis(val) {
+  toggleBlurNumber(val);
 }
 
 const pointsType = [
@@ -249,6 +427,29 @@ onUnmounted(() => {
   background-color: rgba(69, 92, 100, 0.25);
   backdrop-filter: blur(10px);
   z-index: 10;
+  overflow: hidden;
+}
+
+.total-panel::before {
+  content: "";
+  position: absolute;
+  left: 0%;
+  top: 52px;
+  width: 100px;
+  height: 100px;
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: rotate(45deg);
+  filter: blur(30px);
+  animation: moveRight 3s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+}
+
+@keyframes moveRight {
+  from {
+    left: 0%;
+  }
+  to {
+    left: 80%;
+  }
 }
 
 .total-panel::after {
@@ -261,7 +462,8 @@ onUnmounted(() => {
   background-image: linear-gradient(
     to right,
     transparent,
-    rgba(255, 255, 255, 0.2),
+    rgba(255, 255, 255, 0.3),
+    transparent,
     transparent
   );
 }

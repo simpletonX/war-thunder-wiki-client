@@ -19,7 +19,7 @@
         @click="clickTrigger(item)"
       >
         <div class="icon absolute bottom-[3px] left-[2px]">
-          <img :src="item.vehicle_icon" />
+          <img :src="item.vehicle_icon" loading="lazy" />
         </div>
         <div
           class="title absolute right-[5px] top-[5px] text-[13px] z-10"

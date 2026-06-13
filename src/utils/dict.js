@@ -460,3 +460,27 @@ export const unlock_quantitys = {
     boats: {},
   },
 };
+// 壁纸预设值
+export const preset_wallpapers = [
+  {
+    value: "default",
+    url: `/static/wallpapers/default.mp4`,
+    label: "[默认] reel-2023.mp4",
+    type: "video",
+  },
+  {
+    value: "hs_su_30sm",
+    url: `/static/wallpapers/hs_su_30sm.jpg`,
+    label: "hs_su_30sm.jpg",
+    type: "image",
+  },
+  {
+    value: "s_leopard2_a4m",
+    url: `/static/wallpapers/s_leopard2_a4m.jpg`,
+    label: "s_leopard2_a4m.jpg",
+    type: "image",
+  },
+  { value: "0e1113", color: "#0e1113", label: "纯色 #0e1113", type: "color" },
+  { value: "20303a", color: "#20303a", label: "纯色 #20303a", type: "color" },
+  { value: "08382a", color: "#08382a", label: "纯色 #08382a", type: "color" },
+];
