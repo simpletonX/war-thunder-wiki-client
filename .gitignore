@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 public/database/
+old_database/
 .DS_Store
 dist
 dist-ssr

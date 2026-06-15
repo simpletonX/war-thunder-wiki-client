@@ -43,14 +43,27 @@ export async function clearJsdelivrCache(t_c, type) {
 }
 
 /** 从远程仓库加载json数据 */
-export async function getTreeDataApiForGithub(t_c, type) {
-  const url = `https://cdn.jsdelivr.net/gh/simpletonX/war-thunder-treedata-api/database/${t_c}/${t_c}_${type}.json`;
+export async function getTreeDataJsdelivr({ country_code, vehicle_type }) {
+  const url = `https://cdn.jsdelivr.net/gh/simpletonX/war-thunder-wiki-db@main/database/${country_code}/${country_code}_${vehicle_type}.json`;
 
   try {
     const res = await request.get(url);
     return res;
   } catch (err) {
-    console.error(`访问线上database失败: ${t_c}_${type}.json`, err);
+    alert("科技树数据请求失败");
+    throw err;
+  }
+}
+
+/** 从本地 public/database 加载 json 数据 */
+export async function getTreeDataLocal({ country_code, vehicle_type }) {
+  const url = `/database/${country_code}/${country_code}_${vehicle_type}.json`;
+
+  try {
+    const res = await request.get(url);
+    return res;
+  } catch (err) {
+    alert("科技树数据请求失败");
     throw err;
   }
 }

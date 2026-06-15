@@ -23,19 +23,6 @@
 <script setup>
 import { country_code } from "@/utils/dict";
 
-const country_code_texts = {
-  "usa": "美国",
-  "germany": "德国",
-  "ussr": "苏联",
-  "britain": "英国",
-  "japan": "日本",
-  "china": "中国",
-  "italy": "意大利",
-  "france": "法国",
-  "sweden": "瑞典",
-  "israel": "以色列",
-}
-
 const props = defineProps({
   modelValue: String,
 });

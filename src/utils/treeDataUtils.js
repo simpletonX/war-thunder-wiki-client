@@ -1,208 +1,30 @@
-export function updateTreeItemSelected({
-  tree_data,
-  target_item,
-  selected,
-  t_c,
-  type,
-  instantCaching,
-}) {
-  const updateItems = (items, rankSelected, isPremium = false) => {
-    if (!Array.isArray(items)) return false;
+import { useTreeDataStore } from "@/stores/tree_data";
 
-    let hasSelectedInChildren = false;
-    let changed = false; // 标记：是否有任何 item 状态变化
-
-    for (const item of items) {
-      if (item.items?.length) {
-        let childChanged = updateItems(item.items, rankSelected, isPremium);
-
-        // 对 type: multiple 更新其选中状态
-        if (item.type === "multiple") {
-          const prev = item.selected;
-          item.selected = item.items.some((i) => i.selected && i.details);
-          if (item.selected !== prev) childChanged = true;
-        }
-
-        if (childChanged) {
-          hasSelectedInChildren = true;
-          changed = true;
-        }
-      } else if (item.data_unit_id === target_item.data_unit_id) {
-        const prev = item.selected;
-        item.selected = selected;
-
-        // 更新 rank.selected
-        const idx = rankSelected.findIndex(
-          (i) => i.data_unit_id === item.data_unit_id,
-        );
-
-        if (selected) {
-          if (idx === -1) {
-            // ✅ 如果是 premium 载具，rp/sp 设为 0
-            rankSelected.push({
-              data_unit_id: item.data_unit_id,
-              rp: isPremium ? 0 : item.rp,
-              sp: isPremium ? 0 : item.sp,
-            });
-          }
-        } else {
-          if (idx !== -1) rankSelected.splice(idx, 1);
-        }
-
-        if (item.selected !== prev) changed = true;
-        hasSelectedInChildren = selected;
-      }
-    }
-
-    return changed;
-  };
-
-  // 遍历每个 rank 层
-  for (const rank of tree_data.value) {
-    if (!rank.selected) rank.selected = [];
-
-    // 处理 researchable_vehicles（普通载具）
-    if (rank.researchable_vehicles) {
-      for (const col of rank.researchable_vehicles) {
-        if (updateItems(col, rank.selected, false)) {
-          instantCaching(tree_data.value, t_c.value, type.value);
-          return;
-        }
-      }
-    }
-
-    // 处理 premium_vehicles（金币载具）=> rp/sp 强制为 0
-    if (rank.premium_vehicles) {
-      for (const col of rank.premium_vehicles) {
-        if (updateItems(col, rank.selected, true)) {
-          instantCaching(tree_data.value, t_c.value, type.value);
-          return;
-        }
-      }
-    }
-  }
-}
-
-/**
- * 全选/反全选整个 tree_data
- * @param {Ref} tree_data - 科技树数据
- * @param {boolean} selectAll - true 全选，false 反选
- * @param {string} t_c - 国家代号，用于缓存
- * @param {string} type - 军种或类型，用于缓存
- * @param {Function} instantCaching - 缓存函数
- */
-export function toggleSelectAll({
-  tree_data,
-  selectAll,
-  t_c,
-  type,
-  instantCaching,
-}) {
-  if (!tree_data?.value) return;
-
-  const allSelectMode =
-    Boolean(Number(localStorage.getItem("all_select_mode"))) || false;
-
-  for (const rank of tree_data.value) {
-    rank.selected = [];
-
-    const processItems = (items, includeInSelectAll) => {
-      if (!Array.isArray(items)) return;
-
-      for (const item of items) {
-        if (item.items?.length) {
-          // ⭐ 新逻辑：multiple 只选第一个子项
-          if (
-            selectAll &&
-            includeInSelectAll &&
-            allSelectMode &&
-            item.type === "multiple"
-          ) {
-            const first = item.items[0];
-
-            if (first) {
-              first.selected = first.details;
-
-              if (first.selected) {
-                rank.selected.push({
-                  data_unit_id: first.data_unit_id,
-                  rp: first.rp,
-                  sp: first.sp,
-                });
-              }
-            }
-
-            // 其余子项取消
-            for (let i = 1; i < item.items.length; i++) {
-              item.items[i].selected = false;
-            }
-
-            item.selected = first?.selected || false;
-          } else {
-            processItems(item.items, includeInSelectAll);
-
-            if (item.type === "multiple") {
-              item.selected = item.items.some((i) => i.selected && i.details);
-            }
-          }
-        } else {
-          if (selectAll && includeInSelectAll) {
-            item.selected = item.details;
-          } else if (!selectAll) {
-            item.selected = false;
-          }
-
-          if (item.selected) {
-            rank.selected.push({
-              data_unit_id: item.data_unit_id,
-              rp: item.rp,
-              sp: item.sp,
-            });
-          }
-        }
-      }
-    };
-
-    // 全选只处理 researchable
-    if (Array.isArray(rank.researchable_vehicles)) {
-      for (const col of rank.researchable_vehicles) {
-        processItems(col, true);
-      }
-    }
-
-    // 反选清空 premium
-    if (!selectAll && Array.isArray(rank.premium_vehicles)) {
-      for (const col of rank.premium_vehicles) {
-        processItems(col, false);
-      }
-    }
-  }
-
-  if (typeof instantCaching === "function") {
-    instantCaching(tree_data.value, t_c.value, type.value);
-  }
-}
-
-/**
- * 全选/反全选列到当前item
- */
+// 右键选中当前列至当前item
 export function toggleSelectColumnAbove({
   tree_data,
   clicked_item,
-  select,
-  t_c,
-  type,
-  instantCaching,
+  selected_state_map,
 }) {
-  if (!Array.isArray(tree_data) || !clicked_item) return;
+  if (!Array.isArray(tree_data.value) || !clicked_item) return;
 
   // =========================
-  // ① 定位 clicked_item
+  // ① 自动判断 toggle 状态
+  // =========================
+  const clickedId =
+    clicked_item?.data_unit_id || clicked_item?.items?.[0]?.data_unit_id;
+
+  if (!clickedId) return;
+
+  const select = !selected_state_map.value[clickedId];
+
+  // =========================
+  // ② 定位 clicked_item
   // =========================
   let pos = null;
 
-  for (let r = 0; r < tree_data.length && !pos; r++) {
-    const cols = tree_data[r].researchable_vehicles;
+  for (let r = 0; r < tree_data.value.length && !pos; r++) {
+    const cols = tree_data.value[r].researchable_vehicles;
     if (!Array.isArray(cols)) continue;
 
     for (let c = 0; c < cols.length && !pos; c++) {
@@ -232,10 +54,21 @@ export function toggleSelectColumnAbove({
   const { r: targetRank, c: targetCol, i: targetItem, sub: targetSub } = pos;
 
   // =========================
-  // ② 同列向上执行
+  // ③ map 操作工具
+  // =========================
+  const set = (id, val) => {
+    if (val) {
+      selected_state_map.value[id] = true;
+    } else {
+      delete selected_state_map.value[id];
+    }
+  };
+
+  // =========================
+  // ④ 同列向上逻辑（核心）
   // =========================
   for (let r = 0; r <= targetRank; r++) {
-    const col = tree_data[r].researchable_vehicles?.[targetCol];
+    const col = tree_data.value[r].researchable_vehicles?.[targetCol];
     if (!Array.isArray(col)) continue;
 
     const itemEnd = r < targetRank ? col.length - 1 : targetItem;
@@ -245,165 +78,368 @@ export function toggleSelectColumnAbove({
 
       // ===== single =====
       if (!item.items || item.type !== "multiple") {
-        item.selected = select;
+        set(item.data_unit_id, select);
         continue;
       }
 
       // ===== multiple =====
 
-      // ⭐ 取消：无条件全清
-      if (select === false) {
-        for (const subItem of item.items) {
-          subItem.selected = false;
+      // ❗取消：清空整个节点
+      if (!select) {
+        set(item.data_unit_id, false);
+        for (const sub of item.items) {
+          set(sub.data_unit_id, false);
         }
         continue;
       }
 
-      // ===== 以下只可能是 select === true =====
+      // ===== select === true =====
 
-      // 上方 rank 或 当前 rank 之前
       if (r < targetRank || i < targetItem) {
-        item.items[0].selected = true;
+        const first = item.items?.[0];
+        if (first) set(first.data_unit_id, true);
         continue;
       }
 
-      // 当前 rank + 目标 item
       if (i === targetItem) {
-        // 点 multiple 本体
         if (targetSub === null) {
-          item.items[0].selected = true;
-        }
-        // 点 items[k]
-        else {
+          const first = item.items?.[0];
+          if (first) set(first.data_unit_id, true);
+        } else {
           for (let k = 0; k <= targetSub; k++) {
-            item.items[k].selected = true;
+            const sub = item.items[k];
+            if (sub) set(sub.data_unit_id, true);
           }
         }
       }
     }
   }
 
-  // =========================
-  // ③ 同步派生状态（合并式）
-  // =========================
-  for (const rank of tree_data) {
-    // 先把已有 selected 放进 Map，防止被覆盖
-    const selectedMap = new Map(
-      (rank.selected || []).map((i) => [i.data_unit_id, i]),
-    );
+  // 更新本地存储数据
+  const store = useTreeDataStore();
+  store.updateSelectedStateMapAllLocal();
+}
 
-    const sync = (items) => {
+// 全选/反全选
+export function toggleResearchableSelectAll({
+  tree_data,
+  selected_state_map,
+  settings,
+}) {
+  const store = useTreeDataStore();
+  const isAllSelectMode = settings.value.all_select_mode;
+
+  // =========================
+  // ① 判断是否已全选 researchable
+  // =========================
+  const isAllSelected = (() => {
+    const selected = selected_state_map.value;
+
+    let ok = true;
+
+    const walkCheck = (items) => {
       for (const item of items) {
-        if (item.items) {
-          sync(item.items);
-          item.selected = item.items.some((i) => i.selected);
-        } else {
-          if (item.selected) {
-            // ✅ 新增 / 覆盖
-            selectedMap.set(item.data_unit_id, {
-              data_unit_id: item.data_unit_id,
-              rp: item.rp,
-              sp: item.sp,
-            });
+        if (!item) continue;
+
+        if (item.type === "multiple" && Array.isArray(item.items)) {
+          if (isAllSelectMode) {
+            const hasOne = item.items.some((sub) => selected[sub.data_unit_id]);
+
+            if (!hasOne) {
+              ok = false;
+              return;
+            }
           } else {
-            // ✅ 取消选中时才移除
-            selectedMap.delete(item.data_unit_id);
+            walkCheck(item.items);
           }
+          continue;
+        }
+
+        if (item.data_unit_id && !selected[item.data_unit_id]) {
+          ok = false;
+          return;
         }
       }
     };
 
-    for (const col of rank.researchable_vehicles || []) {
-      sync(col);
-    }
-
-    // 最终回写
-    rank.selected = Array.from(selectedMap.values());
-  }
-
-  if (typeof instantCaching === "function") {
-    console.log(tree_data[0]);
-    instantCaching(tree_data, t_c, type);
-  }
-}
-
-/**
- * 检测整个 tree_data 中所有载具（含 researchable_vehicles 与 premium_vehicles）
- * 是否全部加载完详情（details === true）
- * @param {Array} tree_data - 完整的科技树数据
- * @returns {boolean} - 若所有载具的 details 都为 true，则返回 true
- */
-export function areAllDetailsTrueInTree(tree_data) {
-  if (!Array.isArray(tree_data) || tree_data.length === 0) return false;
-
-  const checkItems = (items) => {
-    if (!Array.isArray(items)) return true;
-
-    for (const item of items) {
-      // multiple 类型：递归检查其子项
-      if (item.type === "multiple" && Array.isArray(item.items)) {
-        if (!checkItems(item.items)) return false;
-      } else {
-        // single 类型或普通对象：必须有 details = true
-        if (!item.details) return false;
+    for (const rank of tree_data.value || tree_data) {
+      for (const col of rank.researchable_vehicles || []) {
+        walkCheck(col);
+        if (!ok) return false;
       }
     }
 
-    return true;
+    return ok;
+  })();
+
+  // =========================
+  // ② 如果已全选 → 清空（包括 premium）
+  // =========================
+  if (isAllSelected) {
+    selected_state_map.value = {};
+    store.updateSelectedStateMapAllLocal({});
+    return;
+  }
+
+  // =========================
+  // ③ 否则 → researchable 全选（保留 premium）
+  // =========================
+  const map = { ...selected_state_map.value };
+
+  const walk = (items) => {
+    for (const item of items) {
+      if (!item) continue;
+
+      if (item.type === "multiple" && Array.isArray(item.items)) {
+        if (isAllSelectMode) {
+          const first = item.items[0];
+          if (first?.data_unit_id) {
+            map[first.data_unit_id] = true;
+          }
+        } else {
+          walk(item.items);
+        }
+        continue;
+      }
+
+      if (item.data_unit_id) {
+        map[item.data_unit_id] = true;
+      }
+    }
   };
 
-  // 遍历每个 rank
-  for (const rank of tree_data) {
-    // 检查 researchable_vehicles
-    if (Array.isArray(rank.researchable_vehicles)) {
-      for (const col of rank.researchable_vehicles) {
-        if (!checkItems(col)) return false;
-      }
-    }
-
-    // 检查 premium_vehicles
-    if (Array.isArray(rank.premium_vehicles)) {
-      for (const col of rank.premium_vehicles) {
-        if (!checkItems(col)) return false;
-      }
+  for (const rank of tree_data.value || tree_data) {
+    for (const col of rank.researchable_vehicles || []) {
+      walk(col);
     }
   }
 
-  return true;
+  selected_state_map.value = map;
+  store.updateSelectedStateMapAllLocal(map, true);
 }
 
-/**
- * 遍历 tree_data，筛选出所有 premium_vehicles 下 selected 为 true 的 item，
- * 并导出它们的 data_unit_id 到一个数组中
- */
-export function getSelectedPremiumIds(tree_data) {
-  const result = [];
+// 创建researchable索引表
+export function createResearchableSet(tree_data) {
+  const set = new Set();
 
-  for (const rank of tree_data) {
-    if (!Array.isArray(rank.premium_vehicles)) continue;
+  const walk = (items) => {
+    for (const item of items) {
+      if (!item) continue;
 
-    for (const column of rank.premium_vehicles) {
-      if (!Array.isArray(column)) continue;
+      if (item.type === "multiple" && Array.isArray(item.items)) {
+        walk(item.items);
+        continue;
+      }
 
-      for (const item of column) {
-        // multiple 类型
-        if (item.type === "multiple" && Array.isArray(item.items)) {
-          for (const subItem of item.items) {
-            if (subItem.selected) {
-              result.push(subItem.data_unit_id);
-            }
+      if (item.type === "single") {
+        set.add(item.data_unit_id);
+      }
+    }
+  };
+
+  for (const rank of tree_data || []) {
+    for (const col of rank.researchable_vehicles || []) {
+      walk(col);
+    }
+  }
+
+  return set;
+}
+
+export function parseNumber(value, toFormat = false) {
+  if (value == null) return toFormat ? "0" : 0;
+
+  // 转字符串统一处理
+  let str = typeof value === "string" ? value : String(value);
+
+  // 去除千分位字符串，解析成数字（默认）
+  if (!toFormat) {
+    const normalized = str.replace(/,/g, "");
+
+    // 非纯数字直接返回 0（避免脏数据）
+    if (!/^\d+$/.test(normalized)) return 0;
+
+    return Number(normalized);
+  }
+
+  // 格式化为千分位字符串
+  const num = Number(str.replace(/,/g, ""));
+
+  if (!Number.isFinite(num)) return "0";
+
+  return num.toLocaleString("en-US");
+}
+
+// 创建tree_data对应箭头计算信息的HashMap
+export function createArrowPointsMap(tree_data) {
+  const rankCount = tree_data.length;
+
+  // 1) 计算每个 rank 的最长列长度
+  const rankMaxColLens = new Array(rankCount).fill(0);
+
+  for (let r = 0; r < rankCount; r++) {
+    const rankObj = tree_data[r];
+
+    const allCols = [
+      ...(rankObj.researchable_vehicles || []),
+      ...(rankObj.premium_vehicles || []),
+    ];
+
+    rankMaxColLens[r] =
+      allCols.length === 0
+        ? 0
+        : Math.max(
+            ...allCols.map((col) => (Array.isArray(col) ? col.length : 0)),
+          );
+  }
+
+  // 2) 计算每个 rank 在虚拟纵向坐标中的起始行
+  const prefixRows = new Array(rankCount).fill(0);
+
+  for (let r = 1; r < rankCount; r++) {
+    prefixRows[r] = prefixRows[r - 1] + rankMaxColLens[r - 1];
+  }
+
+  // 3) 计算最大研究列数
+  const maxResearchCols = Math.max(
+    0,
+    ...tree_data.map((rank) => (rank.researchable_vehicles || []).length),
+  );
+
+  // 4) 判断是否为有效载具节点
+  function isValidResearchItem(item) {
+    return item && (item.type === "single" || item.type === "multiple");
+  }
+
+  // 5) 结果镜像
+  const arrow_points_map = {};
+
+  // 6) 主循环
+  for (let colIndex = 0; colIndex < maxResearchCols; colIndex++) {
+    for (let rankIndex = 0; rankIndex < rankCount; rankIndex++) {
+      const rankObj = tree_data[rankIndex];
+      const col = rankObj.researchable_vehicles?.[colIndex];
+
+      if (!Array.isArray(col)) continue;
+
+      for (let rowIndex = 0; rowIndex < col.length; rowIndex++) {
+        const item = col[rowIndex];
+
+        if (!isValidResearchItem(item)) continue;
+
+        let found = false;
+        let foundRank = -1;
+        let foundRow = -1;
+
+        // 查找同列下一个真实载具
+        for (let r = rankIndex; r < rankCount && !found; r++) {
+          const nextRankCol = tree_data[r].researchable_vehicles?.[colIndex];
+
+          if (!Array.isArray(nextRankCol)) continue;
+
+          const startRow = r === rankIndex ? rowIndex + 1 : 0;
+
+          for (let rr = startRow; rr < nextRankCol.length; rr++) {
+            const candidate = nextRankCol[rr];
+
+            if (!isValidResearchItem(candidate)) continue;
+
+            found = true;
+            foundRank = r;
+            foundRow = rr;
+            break;
           }
         }
 
-        // single 类型
-        if (item.type === "single" && item.selected) {
-          result.push(item.data_unit_id);
+        const has_next_item = found;
+
+        let placeholder_item = 0;
+        let cross_level = 0;
+
+        if (found) {
+          cross_level = foundRank - rankIndex;
+
+          const virtualCur = prefixRows[rankIndex] + rowIndex;
+
+          const virtualNext = prefixRows[foundRank] + foundRow;
+
+          placeholder_item = Math.max(0, virtualNext - virtualCur - 1);
+        }
+
+        if (item.data_unit_id) {
+          arrow_points_map[item.data_unit_id] = {
+            placeholder_item,
+            cross_level,
+            has_next_item,
+          };
         }
       }
     }
   }
 
-  return result;
+  return arrow_points_map;
 }
 
-// instantCaching(tree_data.value, t_c.value, type.value);
+// 创建RP/SP元数据映射
+export function createVehicleCostMap(tree_data) {
+  const map = {};
+
+  const collect = (items, rank) => {
+    for (const item of items) {
+      if (item.type === "multiple") {
+        collect(item.items, rank);
+        continue;
+      }
+
+      map[item.data_unit_id] = {
+        rank,
+        rp: parseNumber(item.rp),
+        sp: parseNumber(item.sp),
+      };
+    }
+  };
+
+  for (const rankData of tree_data) {
+    const rank = rankData.rank;
+
+    for (const col of rankData.researchable_vehicles || []) {
+      collect(col, rank);
+    }
+
+    for (const col of rankData.premium_vehicles || []) {
+      collect(col, rank);
+    }
+  }
+
+  return map;
+}
+
+// 计算RP/SP元数据映射结果
+export function calculateRankStats(selected_state_map, vehicle_cost_map) {
+  const stats = {
+    I: { rp: 0, sp: 0, count: 0 },
+    II: { rp: 0, sp: 0, count: 0 },
+    III: { rp: 0, sp: 0, count: 0 },
+    IV: { rp: 0, sp: 0, count: 0 },
+    V: { rp: 0, sp: 0, count: 0 },
+    VI: { rp: 0, sp: 0, count: 0 },
+    VII: { rp: 0, sp: 0, count: 0 },
+    VIII: { rp: 0, sp: 0, count: 0 },
+  };
+
+  for (const data_unit_id in selected_state_map) {
+    if (!selected_state_map[data_unit_id]) continue;
+
+    const vehicle = vehicle_cost_map[data_unit_id];
+    if (!vehicle) continue;
+
+    const rank = vehicle.rank;
+    if (!stats[rank]) continue;
+
+    stats[rank].rp += vehicle.rp;
+    stats[rank].sp += vehicle.sp;
+    stats[rank].count += 1;
+  }
+
+  return stats;
+}

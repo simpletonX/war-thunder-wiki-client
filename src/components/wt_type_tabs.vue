@@ -1,8 +1,9 @@
 <template>
-  <div class="type-tabs text-white w-full" :class="fixedClass">
+  <div class="type-tabs text-white w-full">
     <div
       class="type-tabs-container w-full px-8 flex justify-between items-center"
     >
+      <!-- 顶部导航栏-左侧军种切换 -->
       <div class="flex items-center">
         <div
           class="type-tab-item flex items-center px-[10px] cursor-pointer"
@@ -21,34 +22,23 @@
         <div class="split-line mx-[20px]"></div>
       </div>
 
+      <!-- 顶部导航栏-右侧功能区、底部悬浮信息栏（当前总计、切换显示研发点数、战斗权重、银狮） -->
       <div class="flex items-center">
-        <div
-          class="total-panel-bar flex justify-center items-center absolute max-auto left-0 w-full"
-        >
-          <div
-            class="total-panel flex justify-between items-center rounded-full py-6 pl-6 h-[46px] relative"
-          >
-            <!-- 总计 -->
-            <div class="flex items-center">
-              <span class="text-[14px] opacity-75 mr-2">当前总计: </span>
-              <span class="text-[14px] mr-[2px]">{{ rpNumber }}</span>
-              <img :src="`/static/rp.svg`" width="18" />
-              <span class="text-[14px] ml-1 mr-2">/</span>
-              <span class="text-[14px] mr-[2px]">{{ spNumber }}</span>
-              <img :src="`/static/war-points.svg`" width="18" />
-            </div>
-            <div class="show-mode ml-6 mr-[6px]">
-              <cir_tabs
-                :modelValue="pt"
-                :options="pointsType"
-                @change="togglePointsType"
+        <div class="cursor-pointer flex items-center mr-5">
+          <div class="content">
+            <label class="checkBox">
+              <input
+                id="ch1"
+                type="checkbox"
+                :checked="is_all_selected"
+                @input="toggleSelectAll"
               />
-            </div>
+              <div class="transition"></div>
+            </label>
           </div>
-        </div>
-
-        <div class="cursor-pointer flex items-center mr-8">
-          <light_checkbox :checked="totalSelectNum" @_click="toggleSelectAll" />
+          <p class="text-[14px] ml-2 pt-[2px]">
+            {{ is_all_selected ? "反选" : "全选" }}
+          </p>
         </div>
 
         <div
@@ -57,7 +47,7 @@
         >
           <!-- <img :src="`/static/settings.svg`" class="w-[22px]" /> -->
           <div class="cirle bg-[#ff5f58]"></div>
-          <span class="text-[14px] ml-1 mt-1">偏好设置</span>
+          <span class="text-[14px] ml-1">偏好设置</span>
         </div>
 
         <div
@@ -66,12 +56,12 @@
         >
           <!-- <img :src="`/static/local.svg`" class="w-[16px]" /> -->
           <div class="cirle bg-[#ffbc2e]"></div>
-          <span class="text-[14px] ml-1 mt-1">导出图像</span>
+          <span class="text-[14px] ml-1">导出图像</span>
         </div>
         <div class="cursor-pointer flex items-center mr-5" @click="clearCache">
           <!-- <img :src="`/static/clear_cache.svg`" class="w-[18px]" /> -->
           <div class="cirle bg-[#28c840]"></div>
-          <span class="text-[14px] ml-1 mt-1">缓存修复</span>
+          <span class="text-[14px] ml-1">缓存修复</span>
         </div>
 
         <button class="cir-btn" type="button" @click="join_visible = true">
@@ -90,6 +80,36 @@
             <path d="M7 7h10v10"></path>
           </svg>
         </button>
+
+        <!-- 底部悬浮信息栏（当前总计、切换显示研发点数、战斗权重、银狮） -->
+        <div
+          class="total-panel-bar flex justify-center items-center absolute max-auto left-0 w-full"
+        >
+          <div
+            class="total-panel flex justify-between items-center rounded-full py-6 pl-6 h-[46px] relative"
+          >
+            <!-- 总计 -->
+            <div class="flex items-center">
+              <span class="text-[14px] opacity-75 mr-2">当前总计: </span>
+              <span class="text-[14px] mr-[2px]">{{
+                parseNumber(total_stats.rp, true)
+              }}</span>
+              <img :src="`/static/rp.png`" width="18" />
+              <span class="text-[14px] ml-1 mr-2">/</span>
+              <span class="text-[14px] mr-[2px]">{{
+                parseNumber(total_stats.sp, true)
+              }}</span>
+              <img :src="`/static/war-points.png`" width="18" />
+            </div>
+            <div class="show-mode ml-6 mr-[6px]">
+              <cir_tabs
+                :modelValue="pt"
+                :options="pointsType"
+                @change="togglePointsType"
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="bottom-line"></div>
@@ -120,7 +140,10 @@
 
         <div class="setting-item flex justify-between items-center mb-2">
           <div class="label text-[15px]">全局背景图像/视频</div>
-          <Select :modelValue="bg_img" @update:model-value="toggleBgImgVis">
+          <Select
+            :modelValue="settings.bg_img"
+            @update:model-value="(val) => updateSettings('bg_img', val)"
+          >
             <SelectTrigger class="max-w-[310px]">
               <SelectValue placeholder="请选择预设壁纸" />
             </SelectTrigger>
@@ -147,7 +170,12 @@
 
         <div class="setting-item flex justify-between items-center mb-2">
           <div class="label text-[15px]">背景模糊度</div>
-          <NumberField :model-value="blur_number" :min="0" :max="60" @update:model-value="toggleBlurNumberVis">
+          <NumberField
+            :model-value="settings.blur_number"
+            :min="0"
+            :max="60"
+            @update:model-value="(val) => updateSettings('blur_number', val)"
+          >
             <NumberFieldContent>
               <NumberFieldDecrement />
               <NumberFieldInput />
@@ -157,7 +185,7 @@
         </div>
       </div>
 
-      <!-- 快捷操作 -->
+      <!-- 快捷操作配置 -->
       <div class="quick-operation">
         <div class="setting-type mb-2 relative w-full flex justify-center">
           <div
@@ -189,8 +217,10 @@
           <div class="flex items-center gap-3">
             <Checkbox
               id="terms"
-              :modelValue="multiple_mode"
-              @update:modelValue="toggleMultipleModeVisible"
+              :modelValue="settings.multiple_mode"
+              @update:model-value="
+                (val) => updateSettings('multiple_mode', val)
+              "
             />
             <Label for="terms">单击首选折叠载具</Label>
           </div>
@@ -213,8 +243,10 @@
           <div class="flex items-center gap-3">
             <Checkbox
               id="terms-2"
-              :modelValue="all_select_mode"
-              @update:modelValue="toggleAllSelectModeVisible"
+              :modelValue="settings.all_select_mode"
+              @update:model-value="
+                (val) => updateSettings('all_select_mode', val)
+              "
             />
             <Label for="terms-2">全选时仅首选折叠载具</Label>
           </div>
@@ -222,7 +254,7 @@
       </div>
     </template>
   </public_dialog>
-  
+
   <!-- 加入群聊面板 -->
   <public_dialog v-model="join_visible">
     <template #header>
@@ -231,15 +263,15 @@
     <template #main>
       <div class="flex items-center mb-2">
         <div class="group-item text-center">
-          <img :src="`/static/group-1.png`" class="w-[140px]">
+          <img :src="`/static/group-1.png`" class="w-[140px]" />
           <p class="mt-4">QQ-1群</p>
         </div>
         <div class="group-item text-center mx-6">
-          <img :src="`/static/group-2.png`" class="w-[140px]">
+          <img :src="`/static/group-2.png`" class="w-[140px]" />
           <p class="mt-4">QQ-2群</p>
         </div>
         <div class="group-item text-center">
-          <img :src="`/static/group-3.png`" class="w-[140px]">
+          <img :src="`/static/group-3.png`" class="w-[140px]" />
           <p class="mt-4">QQ-3群</p>
         </div>
       </div>
@@ -256,8 +288,6 @@ import {
 import { onMounted, onUnmounted, ref, computed } from "vue";
 import { storeToRefs } from "pinia";
 import public_dialog from "@/components/public_dialog.vue";
-import light_checkbox from "@/components/light_checkbox.vue";
-// import light_button from "@/components/light_button.vue";
 import cir_tabs from "@/components/cir_tabs.vue";
 import { useTreeDataStore } from "@/stores/tree_data";
 import {
@@ -285,16 +315,12 @@ import {
   NumberFieldInput,
 } from "@/components/ui/number-field";
 import { PhWarningCircle } from "@phosphor-icons/vue";
+import { parseNumber } from "@/utils/treeDataUtils";
+import { toggleResearchableSelectAll } from "@/utils/treeDataUtils";
 
 const treeDataStore = useTreeDataStore();
-const {
-  toggleBgHidden,
-  toggleMultipleMode,
-  toggleAllSelectMode,
-  toggleBgImg,
-  toggleBlurNumber,
-} = treeDataStore;
-const { bg_img, multiple_mode, all_select_mode, blur_number } =
+const { updateSettings } = treeDataStore;
+const { settings, total_stats, selected_state_map, tree_data, researchable_set } =
   storeToRefs(treeDataStore);
 const setting_visible = ref(false);
 const join_visible = ref(false);
@@ -302,57 +328,28 @@ const join_visible = ref(false);
 const props = defineProps({
   vt: String, // 当前军种类型
   pt: String, // 点数信息显示类型（pointsType）
-  totalSummary: String,
-  totalSelectNum: Number,
 });
 const emit = defineEmits([
   "update:vt",
   "update:pt",
-  "toggleSelectAll",
   "clearCache",
   "exportToImage",
 ]);
 
-const formatToWan = (str) => {
-  const num = Number(String(str).replace(/,/g, "").trim());
-  if (!Number.isFinite(num)) return "0";
+const is_all_selected = computed(() => {
+  const selected = selected_state_map.value;
+  const total = researchable_set.value;
 
-  const result = num / 10000;
+  if (!total || total.size === 0) return false;
 
-  // 保留最多2位小数，但去掉末尾0
-  const formatted = result.toFixed(2).replace(/\.?0+$/, "");
-  const text = formatted > 0 ? "万" : "";
+  for (const id of total) {
+    if (!selected[id]) {
+      return false;
+    }
+  }
 
-  return formatted + text;
-};
-
-const rpNumber = computed(() => {
-  return formatToWan(props.totalSummary.rp);
+  return true;
 });
-
-const spNumber = computed(() => {
-  return formatToWan(props.totalSummary.sp);
-});
-
-function toggleBgVisible(event) {
-  toggleBgHidden(event.target.checked);
-}
-
-function toggleBgImgVis(val) {
-  toggleBgImg(val);
-}
-
-function toggleMultipleModeVisible(val) {
-  toggleMultipleMode(val);
-}
-
-function toggleAllSelectModeVisible(val) {
-  toggleAllSelectMode(val);
-}
-
-function toggleBlurNumberVis(val) {
-  toggleBlurNumber(val);
-}
 
 const pointsType = [
   { title: "研发点数", us_text: "Research", id: 1 },
@@ -370,8 +367,11 @@ function toggleVehicleType(item) {
 }
 
 function toggleSelectAll() {
-  emit("toggleSelectAll");
-  console.log(props.totalSelectNum);
+  toggleResearchableSelectAll({
+    tree_data,
+    selected_state_map,
+    settings
+  })
 }
 
 function clearCache() {
@@ -382,28 +382,6 @@ function exportToImage() {
   alert("导出图像功能维护中，敬请期待！");
   // emit("exportToImage");
 }
-
-const fixedClass = ref("");
-function handleScroll() {
-  const scrollY = window.scrollY || window.pageYOffset;
-  const triggerPoint = 114; // 滚动距离阈值（px）
-
-  if (scrollY >= triggerPoint) {
-    // 将type-tabs置于固定定位，形成黏性导航栏
-    fixedClass.value = "scroll-trigger";
-  } else {
-    fixedClass.value = "";
-  }
-}
-
-onMounted(() => {
-  handleScroll();
-  window.addEventListener("scroll", handleScroll);
-});
-
-onUnmounted(() => {
-  window.removeEventListener("scroll", handleScroll);
-});
 </script>
 
 <style scoped>
@@ -417,39 +395,11 @@ onUnmounted(() => {
   bottom: 50px;
 }
 
-/* @media (max-height: 779px) {
-  .total-panel-bar {
-    bottom: 50px;
-  }
-} */
-
 .total-panel {
   background-color: rgba(69, 92, 100, 0.25);
   backdrop-filter: blur(10px);
   z-index: 10;
   overflow: hidden;
-}
-
-.total-panel::before {
-  content: "";
-  position: absolute;
-  left: 0%;
-  top: 52px;
-  width: 100px;
-  height: 100px;
-  background-color: rgba(255, 255, 255, 0.3);
-  transform: rotate(45deg);
-  filter: blur(30px);
-  animation: moveRight 3s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
-}
-
-@keyframes moveRight {
-  from {
-    left: 0%;
-  }
-  to {
-    left: 80%;
-  }
 }
 
 .total-panel::after {
@@ -559,10 +509,10 @@ onUnmounted(() => {
 .checkBox {
   display: block;
   cursor: pointer;
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   border: 3px solid rgba(255, 255, 255, 0);
-  border-radius: 6px;
+  border-radius: 4px;
   position: relative;
   overflow: hidden;
   box-shadow: 0px 0px 0px 2px #fff;
@@ -606,7 +556,7 @@ onUnmounted(() => {
   height: 42px;
   padding: 0 20px 0 22px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 90px;
   background: var(--ink);
   color: var(--cloud);
   font-family:

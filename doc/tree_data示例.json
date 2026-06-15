@@ -1,0 +1,56 @@
+[
+  {
+    "rank": "IV",
+    "researchable_vehicles": [
+      [
+        {
+          "type": "single",
+          "title": "Spitfire Mk IXc",
+          "vehicle_icon": "https://static.encyclopedia.warthunder.com/slots/spitfire_mk9c_iaf.png",
+          "br": "4.3",
+          "rp": "54,000",
+          "sp": "185,000",
+          "data_unit_id": "spitfire_mk9c_iaf",
+          "selected": false,
+          "class_name": "",
+          "details": true,
+          "main_role": "Fighter"
+        }
+      ],
+      [
+        {
+          "type": "single",
+          "title": "Sakeen",
+          "vehicle_icon": "https://static.encyclopedia.warthunder.com/slots/s_199.png",
+          "br": "3.3",
+          "rp": null,
+          "sp": "155,000",
+          "data_unit_id": "s_199",
+          "selected": false,
+          "class_name": "",
+          "details": true,
+          "main_role": "Fighter"
+        }
+      ]
+    ],
+    "premium_vehicles": [
+      [
+        {
+          "type": "single",
+          "title": "Weizman's Spitfire LF Mk.IXe",
+          "vehicle_icon": "https://static.encyclopedia.warthunder.com/slots/spitfire_lf_mk9e_weisman.png",
+          "br": "6.0",
+          "rp": 0,
+          "sp": 0,
+          "data_unit_id": "spitfire_lf_mk9e_weisman",
+          "selected": false,
+          "class_name": "prem",
+          "details": true,
+          "main_role": "Fighter"
+        }
+      ]
+    ],
+    "selected": [],
+    "unlock_quantity": 0
+  }
+]

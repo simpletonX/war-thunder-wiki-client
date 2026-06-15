@@ -1,5 +1,5 @@
 <template>
-  <!-- .wt-tree-item_mask是为了解决stacking context问题而设立的 -->
+  <!-- .wt-tree-item_mask 为了解决stacking context问题 -->
   <div
     class="wt-tree-item_mask relative"
     @contextmenu.prevent.stop="automaticPlanning(item)"
@@ -8,7 +8,7 @@
       class="wt-tree-item w-[150px] h-[56px] mb-[30px]"
       :class="{
         select_mode: totalSelectNum,
-        selected: item.selected,
+        selected: isItemSelected(item),
         [item.class_name]: true,
       }"
       :title="item.items ? 'Click to expand the folded vehicle' : ''"
@@ -19,7 +19,7 @@
         @click="clickTrigger(item)"
       >
         <div class="icon absolute bottom-[3px] left-[2px]">
-          <img :src="item.vehicle_icon" loading="lazy" />
+          <img :src="item.vehicle_icon" loading="lazy" v-fade-image />
         </div>
         <div
           class="title absolute right-[5px] top-[5px] text-[13px] z-10"
@@ -27,52 +27,50 @@
         >
           {{ item.title }}
         </div>
-        <div
-          class="public-loader small absolute right-[5px] bottom-[5px]"
-          v-if="!item.details"
-        ></div>
 
-        <template v-else>
-          <!-- currentPointsType: 0 显示Br，isDefault: false 显示Br -->
-          <!-- 当具备items时，显示其下第一个子载具的main_role -->
-          <template v-if="currentPointsType == 0 || !isDefault">
-            <div
-              class="br absolute right-[20px] bottom-[4px] text-[rgba(255,255,255,.6)] text-[12px] z-10"
-            >
-              {{ item.br }}
-            </div>
-            <img
-              v-if="item.main_role"
-              :src="`/static/main_role/${item.main_role}.svg`"
-              class="h-[14px] absolute bottom-[6px] right-[4px]"
-            />
-            <img
-              v-else-if="item.items"
-              :src="`/static/main_role/${item.items[0].main_role}.svg`"
-              class="h-[14px] absolute bottom-[6px] right-[4px]"
-            />
-          </template>
-          <!-- currentPointsType: 1 显示Rp -->
+        <!-- currentPointsType: 0 显示Br，isDefault: false 显示Br -->
+        <!-- 当具备items时，显示其下第一个子载具的main_role -->
+        <template v-if="currentPointsType == 0 || !isDefault">
           <div
-            class="war-points-number absolute right-[2px] bottom-[4px] flex items-center"
-            v-if="currentPointsType == 1 && isDefault"
+            class="br absolute right-[20px] bottom-[4px] text-[rgba(255,255,255,.6)] text-[12px] z-10"
           >
-            <span class="text-[12px] mr-[1px]">{{
-              item.items ? item.items[0].rp || "free" : item.rp || "free"
-            }}</span>
-            <img :src="`/static/rp.svg`" class="w-[16px]" />
+            {{ item.br }}
           </div>
-          <!-- currentPointsType: 2 显示Sp -->
-          <div
-            class="war-points-number absolute right-[3px] bottom-[4px] flex items-center"
-            v-if="currentPointsType == 2 && isDefault"
-          >
-            <span class="text-[12px] mr-[1px]">{{
-              item.items ? item.items[0].sp || "free" : item.sp || "free"
-            }}</span>
-            <img :src="`/static/war-points.svg`" class="w-[18px]" />
-          </div>
+          <img
+            v-if="item.main_role"
+            :src="`/static/main_role/${item.main_role}.svg`"
+            class="h-[14px] absolute bottom-[6px] right-[4px]"
+          />
+          <img
+            v-else-if="item.items"
+            :src="`/static/main_role/${item.items[0].main_role}.svg`"
+            class="h-[14px] absolute bottom-[6px] right-[4px]"
+          />
         </template>
+        <!-- currentPointsType: 1 显示Rp -->
+        <div
+          class="war-points-number absolute right-[2px] bottom-[4px] flex items-center"
+          v-if="currentPointsType == 1 && isDefault"
+        >
+          <span class="text-[12px] mr-[1px]">{{
+            item.items
+              ? item.items[0].rp_view || "free"
+              : item.rp_view || "free"
+          }}</span>
+          <img :src="`/static/rp.png`" class="w-[16px]" />
+        </div>
+        <!-- currentPointsType: 2 显示Sp -->
+        <div
+          class="war-points-number absolute right-[3px] bottom-[4px] flex items-center"
+          v-if="currentPointsType == 2 && isDefault"
+        >
+          <span class="text-[12px] mr-[1px]">{{
+            item.items
+              ? item.items[0].sp_view || "free"
+              : item.sp_view || "free"
+          }}</span>
+          <img :src="`/static/war-points.png`" class="w-[18px]" />
+        </div>
         <!-- 左上角梯形 -->
         <div
           class="trapezoid"
@@ -84,7 +82,7 @@
         </div>
         <!-- 护身符 -->
         <div class="amulet" :hidden="item.class_name != 'prem'">
-          <img :src="`/static/premium_vehicle.svg`" alt="" />
+          <img :src="`/static/premium_vehicle.png`" alt="" />
         </div>
 
         <!-- 金鹰背景 -->
@@ -99,7 +97,7 @@
         v-if="
           !isPremium &&
           arrowHeight !== 0 &&
-          planPathToTarget2Params?.type !== 'helicopters'
+          types.vehicle_type != 'helicopters'
         "
         class="absolute left-1/2 bottom-0 w-[8px] bg-[#6a8082]"
         :style="{
@@ -130,7 +128,7 @@
             v-for="(subItem, subIndex) in item.items"
             :class="{
               select_mode: totalSelectNum,
-              selected: subItem.selected,
+              selected: selected_state_map[subItem.data_unit_id],
               [subItem.class_name]: true,
             }"
             @click="clickTrigger(subItem)"
@@ -142,46 +140,40 @@
             <div class="title absolute right-[5px] top-[5px] text-[13px] z-10">
               {{ subItem.title }}
             </div>
-            <div
-              class="public-loader small absolute right-[5px] bottom-[5px]"
-              v-if="!subItem.details"
-            ></div>
 
-            <template v-else>
-              <!-- currentPointsType: 0 显示Br，isDefault: false 显示Br -->
-              <template v-if="currentPointsType == 0 || !isDefault">
-                <div
-                  class="br absolute right-[20px] bottom-[4px] text-[rgba(255,255,255,.6)] text-[12px] z-10"
-                >
-                  {{ subItem.br }}
-                </div>
-                <img
-                  v-if="subItem.main_role"
-                  :src="`/static/main_role/${subItem.main_role}.svg`"
-                  class="h-[14px] absolute bottom-[6px] right-[4px]"
-                />
-              </template>
-              <!-- currentPointsType: 1 显示Rp -->
+            <!-- currentPointsType: 0 显示Br，isDefault: false 显示Br -->
+            <template v-if="currentPointsType == 0 || !isDefault">
               <div
-                class="war-points-number absolute right-[2px] bottom-[4px] flex items-center"
-                v-if="currentPointsType == 1 && isDefault"
+                class="br absolute right-[20px] bottom-[4px] text-[rgba(255,255,255,.6)] text-[12px] z-10"
               >
-                <span class="text-[12px] mr-[1px]">{{
-                  subItem.rp || "free"
-                }}</span>
-                <img :src="`/static/rp.svg`" class="w-[16px]" />
+                {{ subItem.br }}
               </div>
-              <!-- currentPointsType: 2 显示Sp -->
-              <div
-                class="war-points-number absolute right-[3px] bottom-[4px] flex items-center"
-                v-if="currentPointsType == 2 && isDefault"
-              >
-                <span class="text-[12px] mr-[1px]">{{
-                  subItem.sp || "free"
-                }}</span>
-                <img :src="`/static/war-points.svg`" class="w-[18px]" />
-              </div>
+              <img
+                v-if="subItem.main_role"
+                :src="`/static/main_role/${subItem.main_role}.svg`"
+                class="h-[14px] absolute bottom-[6px] right-[4px]"
+              />
             </template>
+            <!-- currentPointsType: 1 显示Rp -->
+            <div
+              class="war-points-number absolute right-[2px] bottom-[4px] flex items-center"
+              v-if="currentPointsType == 1 && isDefault"
+            >
+              <span class="text-[12px] mr-[1px]">{{
+                subItem.rp_view || "free"
+              }}</span>
+              <img :src="`/static/rp.png`" class="w-[16px]" />
+            </div>
+            <!-- currentPointsType: 2 显示Sp -->
+            <div
+              class="war-points-number absolute right-[3px] bottom-[4px] flex items-center"
+              v-if="currentPointsType == 2 && isDefault"
+            >
+              <span class="text-[12px] mr-[1px]">{{
+                subItem.sp_view || "free"
+              }}</span>
+              <img :src="`/static/war-points.png`" class="w-[18px]" />
+            </div>
 
             <div
               v-if="!isPremium && subIndex < item.items.length - 1"
@@ -212,19 +204,14 @@
 </template>
 
 <script setup>
-import { defineProps, ref, watch } from "vue";
+import { computed, defineProps, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { usePublicMaskStore } from "@/stores/public_mask";
-import { usePublicMessageDialogStore } from "@/stores/public_message_dialog";
-import {
-  getSelectedPremiumIds,
-  toggleSelectColumnAbove,
-} from "@/utils/treeDataUtils";
-import { planPathToTarget2 } from "@/utils/planPathToTarget2";
+import { toggleSelectColumnAbove } from "@/utils/treeDataUtils";
 import { useTreeDataStore } from "@/stores/tree_data";
 
 const treeDataStore = useTreeDataStore();
-const { multiple_mode } = storeToRefs(treeDataStore);
+const { settings, selected_state_map, tree_data, types } = storeToRefs(treeDataStore);
 
 const props = defineProps({
   /**
@@ -237,46 +224,58 @@ const props = defineProps({
   isDefault: { type: Boolean, default: false },
   // 当前points类型（0: 权重、1: 研发点、2: 银狮）
   currentPointsType: { type: Number, default: 0 },
-  // 当前已选中载具数量
-  totalSelectNum: { type: Number, default: 0 },
-  // planPathToTarget2函数所需必要参数
-  planPathToTarget2Params: { type: Object },
+  // 当前载具箭头计算数据元信息
+  arrow_points: { type: Object, required: false },
 });
 const emit = defineEmits(["updateItemSelected"]);
+const totalSelectNum = computed(() => !!Object.keys(selected_state_map.value).length);
 
 const public_mask = usePublicMaskStore();
+// 折叠载具面板显示状态
 const showStatus = ref(false);
+// 判断当前item选中状态
+function isItemSelected(item) {
+  // single：直接查 map
+  if (item.type === "single") {
+    return !!selected_state_map.value[item.data_unit_id];
+  }
+
+  // multiple：判断 group 逻辑
+  if (item.type === "multiple") {
+    return item.items.some(
+      (child) => selected_state_map.value[child.data_unit_id],
+    );
+  }
+
+  return false;
+}
+// 点击item时更新选中状态策略
 function clickTrigger(item) {
-  if (!item.items) {
-    /**
-     * 单载具，切换其selected，触发tree_data更新
-     */
-    emit("updateItemSelected", item, !item.selected);
-  } else {
-    /**
-     * 多载具，根据偏好设置中的multiple_mode项执行不同逻辑：
-     *  - multiple_mode为true时，执行multipleEvent函数逻辑
-     *  - multiple_mode为false时，执行展开折叠列表逻辑
-     */
-    if (multiple_mode.value) {
-      return multipleEvent(item);
+  if (item.type == "multiple") {
+    // settings.multiple_mode: true -> 选中/反选其下第一个折叠载具
+    if (settings.value.multiple_mode) {
+      treeDataStore.updateSelectedStateMap(item.items[0].data_unit_id);
     }
-    public_mask.setOpacity(0.55);
-    public_mask.show();
-    showStatus.value = !showStatus.value;
+    // settings.multiple_mode: false -> 打开折叠面板
+    else {
+      public_mask.setOpacity(0.65);
+      public_mask.show();
+      showStatus.value = !showStatus.value;
+    }
+  } else {
+    treeDataStore.updateSelectedStateMap(item.data_unit_id);
   }
 }
 
-const arrowHeight = ref(0);
 /** 计算箭头的高度 */
+const arrowHeight = ref(0);
 function calcArrowHeight() {
   const ITEM_HEIGHT = 56; // 单个 item 的高度（px）
   const ITEM_MARGIN = 30; // 每个 item 的下外边距（px）
   const RANK_MARGIN = 40; // 等级区域div之间的额外间距（px）
 
-  if (!props.item.arrow_points) return;
-  const { cross_level, placeholder_item, has_next_item } =
-    props.item.arrow_points;
+  if (!props.arrow_points) return;
+  const { cross_level, placeholder_item, has_next_item } = props.arrow_points;
   const itemHeightSum = placeholder_item * (ITEM_HEIGHT + ITEM_MARGIN); // item高度+下外边距之和
   const rankHeightSum = cross_level * RANK_MARGIN; // 跨行的总外边距之和
 
@@ -292,80 +291,32 @@ watch(
     if (!newVal) {
       showStatus.value = false;
     }
-  }
+  },
 );
 
-const messageStore = usePublicMessageDialogStore();
-
-/** 一键自动规划路线 */
-function automaticPlanning_(item) {
-  const _item = item;
-  messageStore.show(
-    "⚠️ 一键规划路线属于开放实验性功能，结果不一定符合预期，请知悉！",
-    3000
-  );
-  // 如果对一个multiple-item进行单击，则直接规划其下items中第一个item
-  if (item.items) {
-    _item = item.items[0];
-  }
-  // 遍历tree_data，筛选出所有premium_vehicles下selected为true的item，并将其data_unit_id导出到一个数组中
-  const preset_data_unit_ids = getSelectedPremiumIds(
-    props.planPathToTarget2Params.tree_data
-  );
-  // 开始规划路线
-  planPathToTarget2({
-    ...props.planPathToTarget2Params,
-    target_data_unit_id: _item.data_unit_id,
-    preset_data_unit_ids,
-  });
-}
-
 /**
- * 一键自动规划路线临时替代方案-全选当前列
+ * 右键自动选择当前载具以及同列的上方所有载具
  */
 function automaticPlanning(item) {
-  console.log(item);
-  toggleSelectColumnAbove({
-    ...props.planPathToTarget2Params,
-    clicked_item: item,
-    select: !item.selected,
-  });
-  // console.log(props.planPathToTarget2Params);
-}
-
-let lastClickTime = 0,
-  multipleTimer = null;
-
-function multipleEvent({ selected, items }) {
-  const now = Date.now();
-
-  // 双击
-  if (now - lastClickTime < 300) {
-    lastClickTime = 0;
-    clearTimeout(multipleTimer);
-    // 展开折叠列表
-    public_mask.setOpacity(0.55);
-    public_mask.show();
-    showStatus.value = !showStatus.value;
-    return;
+  let clicked_item;
+  if (item.type == "multiple") {
+    // settings.multiple_mode: true -> 列选中的最终节点为当下第一个折叠载具
+    if (settings.value.multiple_mode) {
+      clicked_item = item.items[0];
+    }
+    // settings.multiple_mode: false -> 列选中的最终节点为当下最后一个折叠载具
+    else {
+      clicked_item = item.items[item.items.length - 1];
+    }
+  } else {
+    clicked_item = item;
   }
 
-  lastClickTime = now;
-  multipleTimer = setTimeout(() => {
-    if (Date.now() - lastClickTime >= 300) {
-      // 单击
-      // 其下items均未选中则默认选中第一个子item
-      if (!selected) {
-        emit("updateItemSelected", items[0], true);
-      }
-      // 否则其下items所有子item全部取消选中
-      else {
-        for (let i = 0; i < items.length; i++) {
-          emit("updateItemSelected", items[i], false);
-        }
-      }
-    }
-  }, 300);
+  toggleSelectColumnAbove({
+    tree_data,
+    clicked_item,
+    selected_state_map,
+  });
 }
 </script>
 
@@ -381,56 +332,67 @@ function multipleEvent({ selected, items }) {
   padding: 25px 25px 0;
 }
 .wt-tree-item {
-  border: 1px solid #3d4c51;
-  border-top: 2px solid #62737a;
+  border: 1px solid #495a5f;
+  border-top: 2px solid #6a7b82;
   box-shadow: 0 2px 3px 1px rgba(0, 0, 0, 0.1);
-  background-color: rgb(56, 67, 77, 1);
+  background-color: rgb(66, 78, 90);
   position: relative;
   user-select: none;
   top: 0;
   transition: 0.3s;
 }
 .wt-tree-item.select_mode {
-  /* filter: brightness(50%); */
   opacity: 0.4;
 }
 .wt-tree-item.selected {
-  /* filter: brightness(100%); */
   opacity: 1;
 }
+/* .wt-tree-item::after {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  box-shadow: ;
+} */
 .wt-tree-item.prem {
   border: 1px solid #57441e;
   border-top: 2px solid #8b6626;
-  background-color: #493e1a;
+  background-color: #594b20;
   background-image: linear-gradient(to bottom, transparent, #372f15);
 }
 .wt-tree-item.squad {
-  border: 1px solid #3e5c2c;
-  border-top: 2px solid #4b712f;
-  background-color: #32492d;
-
+  border: 1px solid #497132;
+  border-top: 2px solid #588537;
+  background-color: #3b5734;
 }
 .wt-tree-item::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("/static/6417ea1848ed628c46d5.png");
-  opacity: 0.3; /* 👈 控制透明度 */
-}
-.wt-tree-item.prem::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: url("/static/6417ea1848ed628c46d5-white.png");
-  opacity: 0.1; /* 👈 控制透明度 */
+  background-image: radial-gradient(circle, #fff 1px, transparent 1px);
+  background-size: 5px 5px;
+  -webkit-mask-image: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 1) 30%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  mask-image: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 1) 30%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  opacity: 0.04; /* 👈 控制透明度 */
 }
 .wt-tree-item .icon img {
   height: 46px;
 }
+/* 左上角梯形 */
 .trapezoid {
   width: 30px;
   height: 6px;
-  background-color: #38434d;
+  background-color: rgb(66, 78, 90);
   /* background-color: #fff; */
   position: absolute;
   top: -6px;
@@ -438,15 +400,15 @@ function multipleEvent({ selected, items }) {
   border-top: 2px solid #62737a;
 }
 .trapezoid.prem {
-  background-color: #433c28;
+  background-color: #594b20;
   border-top: 2px solid #7b591f;
 }
 .trapezoid::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("/static/6417ea1848ed628c46d5.png");
-  opacity: 0.3; /* 👈 控制透明度 */
+  /* background-image: url("/static/6417ea1848ed628c46d5_white.png"); */
+  opacity: 1; /* 👈 控制透明度 */
 }
 .left-border-fill {
   position: absolute;
@@ -477,7 +439,7 @@ function multipleEvent({ selected, items }) {
   width: 4px;
   height: 0;
   border-right: 4px solid transparent;
-  border-bottom: 4px solid #38474b;
+  border-bottom: 4px solid rgb(66, 78, 90);
   position: absolute;
   left: 0;
   bottom: -6px;
@@ -487,7 +449,7 @@ function multipleEvent({ selected, items }) {
   width: 4px;
   height: 0;
   border-right: 4px solid transparent;
-  border-bottom: 4px solid #433c28;
+  border-bottom: 4px solid #594b20;
   position: absolute;
   left: 0;
   bottom: -6px;
@@ -495,13 +457,13 @@ function multipleEvent({ selected, items }) {
 .amulet {
   position: absolute;
   left: calc(50% - 10px);
-  top: -9px;
+  top: -10px;
 }
 .amulet img {
   width: 20px;
 }
 .gold {
-  background-image: url(/static/gold-.svg);
+  /* background-image: url(/static/gold-.png); */
   background-repeat: no-repeat;
   background-position: right top;
   background-size: auto 135%;
@@ -514,7 +476,7 @@ function multipleEvent({ selected, items }) {
   opacity: 0.1;
 }
 .war-points {
-  background: url(/static/war-points.svg) no-repeat right top;
+  /* background: url(/static/war-points.png) no-repeat right top; */
   background-size: auto 135%;
   position: absolute;
   width: 100%;

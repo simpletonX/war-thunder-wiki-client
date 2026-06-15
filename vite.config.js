@@ -6,8 +6,7 @@ import vue from "@vitejs/plugin-vue";
 import tailwindcss from "@tailwindcss/vite";
 import AutoImport from "unplugin-auto-import/vite";
 import Components from "unplugin-vue-components/vite";
-import { ElementPlusResolver } from "unplugin-vue-components/resolvers";
-import { visualizer } from 'rollup-plugin-visualizer'
+import { visualizer } from "rollup-plugin-visualizer";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -18,18 +17,18 @@ export default defineConfig({
     tailwindcss(),
     // 自动导入 API
     AutoImport({
-      resolvers: [ElementPlusResolver()],
+      resolvers: [],
     }),
     // 自动导入组件
     Components({
-      resolvers: [ElementPlusResolver()],
+      resolvers: [],
     }),
-    visualizer({
-      filename: './doc/dependency-graph.html', // 输出文件
-      open: true,
-      gzipSize: true,
-      brotliSize: true,
-    }),
+    // visualizer({
+    //   filename: "./doc/dependency-graph.html",
+    //   open: true,
+    //   gzipSize: true,
+    //   brotliSize: true,
+    // }),
   ],
   resolve: {
     alias: {
@@ -41,6 +40,10 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    open: true
-  }
+    open: true,
+    // host: true,
+    watch: {
+      ignored: ["**/node_modules/**", "**/dist/**", "**/doc/**"],
+    },
+  },
 });

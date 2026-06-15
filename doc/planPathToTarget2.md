@@ -1,3 +1,6 @@
+[失败] src/utils/planPathToTarget2.js -> 计算到达某个载具的最短路径（自动规划）
+
+```js
 /**
  * 规划到目标载具的最短路径
  */
@@ -533,3 +536,5 @@ function updateRankSelected(treeData) {
     }
   });
 }
+```
+

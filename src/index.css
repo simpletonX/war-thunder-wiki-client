@@ -26,7 +26,7 @@ body {
 }
 
 .dark {
-  --popover: #1A262A !important;
+  --popover: #1a262a !important;
   --accent: #444d5d !important;
   --input: #2d4148 !important;
 }
@@ -175,3 +175,19 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* 图片加载后执行动画 */
+.bounce-bottom {
+  animation: bounce-bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+@keyframes bounce-bottom {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 32px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+/* 图片加载后执行动画 */

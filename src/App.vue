@@ -6,7 +6,7 @@
     <div
       class="content-background-promo-mask w-[100vw] h-[100vh] absolute top-0 left-0"
       :style="{
-        backdropFilter: `blur(${ blur_number }px)`
+        backdropFilter: `blur(${settings.blur_number}px)`,
       }"
     ></div>
     <video
@@ -17,21 +17,27 @@
       :src="current_bg_img.url"
       class="bg-liner"
     />
-    <img v-else-if="current_bg_img.type == 'image'" :src="current_bg_img.url" class="bg-liner" />
-    <div v-else class="w-full h-full bg-liner" :style="{
-      backgroundColor: current_bg_img.color
-    }"></div>
+    <img
+      v-else-if="current_bg_img.type == 'image'"
+      :src="current_bg_img.url"
+      class="bg-liner"
+    />
+    <div
+      v-else
+      class="w-full h-full bg-liner"
+      :style="{
+        backgroundColor: current_bg_img.color,
+      }"
+    ></div>
   </div>
 
   <div class="container-main">
     <!-- 载具军种切换tab栏 -->
     <!-- <div class="fill-placeholder h-[66px]"></div> -->
     <wt_type_tabs
-      v-model:vt="currentVehicleType"
+      :vt="types.vehicle_type"
+      @update:vt="(val) => updateTypes('vehicle_type', val)"
       v-model:pt="currentPointsType"
-      :totalSummary="totalSummary"
-      :totalSelectNum="totalSelectNum"
-      @toggleSelectAll="toggleSelectAll_"
       @clearCache="clearCache"
     />
 
@@ -40,7 +46,7 @@
       <!-- 遮罩层，解决因backdrop-filter带来的包含块对fixed定位的影响 -->
       <div class="backdrop-filter"></div>
 
-      <div class="tree-area pb-[140px]" ref="treeArea" v-if="tree_data?.length">
+      <div class="tree-area pb-[140px]" v-if="tree_data?.length">
         <!-- 每个等级 -->
         <!-- 全局通用遮罩层 -->
         <public_mask />
@@ -55,13 +61,15 @@
             >
 
             <div class="flex rank-sprps text-[13px] ml-5">
-              <span class="rps">{{ rankRpSps[rankIndex].total_rp_text }}</span>
-              <img :src="`/static/rp.svg`" class="w-[16px] mr-1" />
+              <span class="rps">{{
+                parseNumber(rankStats[rankItem.rank].rp, true)
+              }}</span>
+              <img :src="`/static/rp.png`" class="w-[16px] mr-1" />
               <span>,</span>
               <span class="sps ml-2">{{
-                rankRpSps[rankIndex].total_sp_text
+                parseNumber(rankStats[rankItem.rank].sp, true)
               }}</span>
-              <img :src="`/static/war-points.svg`" class="w-[18px]" />
+              <img :src="`/static/war-points.png`" class="w-[18px]" />
             </div>
           </div>
 
@@ -70,9 +78,9 @@
             class="unlock-quantity absolute top-[calc(50%-15px)] left-[8px] text-[12px] w-[30px] h-[30px] bg-[rgba(255,255,255,.05)] rounded-full flex justify-center items-center text-[rgba(255,255,255,.75)]"
           >
             {{
-              rankItem.selected.length > current_uq[rankItem.rank]
+              rankStats[rankItem.rank].count > current_uq[rankItem.rank]
                 ? current_uq[rankItem.rank]
-                : rankItem.selected.length
+                : rankStats[rankItem.rank].count
             }}/{{ current_uq[rankItem.rank] }}
           </div>
 
@@ -93,14 +101,7 @@
                   :isPremium="false"
                   :isDefault="true"
                   :currentPointsType="currentPointsType"
-                  :totalSelectNum="totalSelectNum"
-                  :planPathToTarget2Params="{
-                    tree_data,
-                    instantCaching,
-                    t_c: currentCountry,
-                    type: currentVehicleType,
-                  }"
-                  @updateItemSelected="updateItemSelected"
+                  :arrow_points="arrow_points_map[item.data_unit_id]"
                 />
                 <!-- 如果 columnItem 为空数组依旧会渲染占位列（无 item） -->
               </div>
@@ -121,8 +122,7 @@
                   :item="item"
                   :isPremium="true"
                   :currentPointsType="currentPointsType"
-                  :totalSelectNum="totalSelectNum"
-                  @updateItemSelected="updateItemSelected"
+                  :arrow_points="arrow_points_map[item.data_unit_id]"
                 />
               </div>
             </div>
@@ -139,7 +139,10 @@
       </div>
 
       <!-- 国家切换tab栏 -->
-      <wt_country_tabs v-model="currentCountry" />
+      <wt_country_tabs
+        :modelValue="types.country_code"
+        @update:modelValue="(val) => updateTypes('country_code', val)"
+      />
     </div>
   </div>
 
@@ -157,252 +160,70 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick, computed } from "vue";
+import { ref, onMounted, watch, computed } from "vue";
 import wt_tree_item from "@/components/wt_tree_item.vue";
 import wt_country_tabs from "@/components/wt_country_tabs.vue";
 import wt_type_tabs from "@/components/wt_type_tabs.vue";
 import public_mask from "@/components/public_mask.vue";
 import public_message_dialog from "@/components/public_message_dialog.vue";
-import { usePublicMessageDialogStore } from "@/stores/public_message_dialog";
-import { usePublicMaskStore } from "@/stores/public_mask";
 import { useTreeDataStore } from "@/stores/tree_data";
-import { abort_batch_request, clearTreeDataCache } from "@/utils/cache";
 import { storeToRefs } from "pinia";
-import { usePointsSummary } from "@/composables/usePointsSummary";
-import { mountArrowPoints } from "@/utils/mountArrowPoints";
+
 import {
-  updateTreeItemSelected,
-  toggleSelectAll,
-  areAllDetailsTrueInTree,
+  createArrowPointsMap,
+  createVehicleCostMap,
+  parseNumber,
 } from "@/utils/treeDataUtils";
-import { loadLocalJSON } from "@/utils/loadLocalJson";
-import {
-  unlock_quantitys,
-  country_code,
-  vehicle_type,
-  vehicle_type_texts,
-  country_code_texts,
-  preset_wallpapers,
-} from "@/utils/dict";
+import { createResearchableSet } from "@/utils/treeDataUtils";
+import { unlock_quantitys, preset_wallpapers } from "@/utils/dict";
+import { getTreeDataLocal } from "./api/tree_data";
 
 /** stores初始化 */
-const public_mask_store = usePublicMaskStore();
 const treeDataStore = useTreeDataStore();
-const { updateTreeData, instantCaching } = treeDataStore;
-const { tree_data, bg_img, blur_number } = storeToRefs(treeDataStore);
+const {
+  updateTreeData,
+  updateTypes,
+  updateVehicleCostMap,
+  updateResearchableSet,
+} = treeDataStore;
+const { tree_data, settings, types, rankStats } = storeToRefs(treeDataStore);
 
 const current_bg_img = computed(() => {
-  return preset_wallpapers.find((el) => el.value == bg_img.value) || {};
-});
-setTimeout(() => {
-  console.log(current_bg_img);
-}, 500);
-
-/** 当前选中的类型值（国家/军种/点数值） */
-const currentCountry = ref(localStorage.getItem("currentCountry") || "usa");
-const currentVehicleType = ref(
-  localStorage.getItem("currentVehicleType") || "ground",
-);
-const currentPointsType = ref(localStorage.getItem("currentPointsType") || "0");
-/** 当前总计算点数值（RP/SP）、当前已选中的载具数量 */
-const { totalSummary, totalSelectNum } = usePointsSummary(
-  tree_data,
-  currentPointsType,
-);
-
-/** 全选/反全选 */
-function toggleSelectAll_() {
-  toggleSelectAll({
-    tree_data,
-    selectAll: !totalSelectNum.value,
-    t_c: currentCountry,
-    type: currentVehicleType,
-    instantCaching,
-  });
-}
-
-/** 清除当前国家缓存中的tree_data */
-// function clearCache() {
-//   localStorage.removeItem(
-//     `${currentCountry.value}_${currentVehicleType.value}`
-//   );
-//   requestTreeData();
-// }
-function clearCache() {
-  public_mask_store.openLoading();
-  public_mask_store.setOpacity(0.8);
-  public_mask_store.show();
-
-  setTimeout(async () => {
-    await clearTreeDataCache();
-    await requestTreeData();
-    alert("已清除历史缓存遗留！");
-  }, 600);
-}
-
-const messageStore = usePublicMessageDialogStore();
-/** 单个载具选中/取消选中状态 */
-const updateItemSelected = (item, selected) => {
-  // 检测tree_data是否全部加载完详情
-  if (areAllDetailsTrueInTree(tree_data.value)) {
-    updateTreeItemSelected({
-      tree_data,
-      target_item: item,
-      selected,
-      t_c: currentCountry,
-      type: currentVehicleType,
-      instantCaching,
-    });
-  } else {
-    messageStore.show(
-      "Please wait for the details request to be completed.",
-      2000,
-    );
-  }
-};
-
-/** 缓存命中检测 */
-async function cacheHit(cacheCallback, request) {
-  const cache_tree_data = localStorage.getItem(
-    `${currentCountry.value}_${currentVehicleType.value}`,
+  return (
+    preset_wallpapers.find((el) => el.value == settings.value.bg_img) || {}
   );
-  const t_c = currentCountry.value,
-    type = currentVehicleType.value;
+});
 
-  // 缓存命中
-  if (cache_tree_data) {
-    console.log(
-      `${currentCountry.value}_${currentVehicleType.value} 本地缓存命中`,
-    );
-    await mountArrowPoints({
-      tree_data: {
-        value: JSON.parse(cache_tree_data),
-      },
-      _t_c: t_c,
-      _type: type,
-      instantCaching,
-    });
+const currentPointsType = ref(localStorage.getItem("currentPointsType") || "0");
 
-    updateTreeData(JSON.parse(cache_tree_data));
-    // 进入details请求队列
-    // batch_request_details(JSON.parse(cache_tree_data), t_c, type);
-
-    return cacheCallback && cacheCallback();
-  }
-  // 缓存未命中，发起请求
-  request && request();
+// 创建tree_data对应箭头计算信息的HashMap
+const arrow_points_map = ref({});
+function createArrowPoints(tree_data) {
+  arrow_points_map.value = createArrowPointsMap(tree_data);
 }
 
 /** 请求tree_data数据 */
 async function requestTreeData() {
-  public_mask_store.openLoading();
-  public_mask_store.setOpacity(0.8);
-  public_mask_store.show();
-
-  // clearTreeDataCache();
-
-  cacheHit(
-    // 缓存命中的回调
-    () => {
-      // 至少300毫秒后才能再次切换currentCountry/currentVehicleType
-      setTimeout(() => {
-        public_mask_store.hide();
-      }, 300);
-    },
-    // 缓存未命中的回调
-    async () => {
-      console.log(
-        `${currentCountry.value}_${currentVehicleType.value} 缓存未命中，将从本地读取数据`,
-      );
-      // 不再请求Node.js服务器，直接从Github线上仓库读取database
-      // const res = await getTreeDataApiForGithub(
-      //   currentCountry.value,
-      //   currentVehicleType.value
-      // );
-      const res = await loadLocalJSON(currentCountry, currentVehicleType);
-      // 进入指向箭头计算程序（内附即时缓存）
-      await mountArrowPoints({
-        tree_data: { value: res },
-        _t_c: currentCountry.value,
-        _type: currentVehicleType.value,
-        instantCaching,
-      });
-      public_mask_store.hide();
-    },
-  );
+  // const res = await getTreeDataJsdelivr(types.value);
+  const res = await getTreeDataLocal(types.value);
+  updateTreeData(res);
+  // 创建Researchable集合
+  updateResearchableSet(createResearchableSet(res));
+  // 创建指向箭头元数据映射
+  createArrowPoints(res);
+  // 创建RP/SP元数据映射
+  updateVehicleCostMap(createVehicleCostMap(res));
 }
 
 /** 切换currentCountry/currentVehicleType时进行requestTreeData，更新当前tree_data */
-watch(
-  [currentCountry, currentVehicleType],
-  async ([newFirst, newLast], [oldFirst, oldLast]) => {
-    // 中断当前details请求队列
-    await abort_batch_request();
-    localStorage.setItem("currentCountry", newFirst);
-    localStorage.setItem("currentVehicleType", newLast);
+watch(types, () => requestTreeData(), { deep: true });
 
-    requestTreeData();
-  },
-);
-
-const treeArea = ref();
-
-/** 动态获取当前国家/军种的unlock_quantity */
+// 动态获取当前国家_军种的unlock_quantity
 const current_uq = computed(
-  () => unlock_quantitys[currentCountry.value][currentVehicleType.value],
+  () => unlock_quantitys[types.value.country_code][types.value.vehicle_type],
 );
-
-const format_with_comma = (num = 0) => Number(num).toLocaleString("en-US");
-/** 动态计算每个rank的总rp&总sp */
-const rankRpSps = computed(() => {
-  return tree_data.value.map((rankItem) => {
-    let total_rp = 0;
-    let total_sp = 0;
-
-    rankItem.selected?.forEach((sel) => {
-      total_rp +=
-        Number(
-          typeof sel.rp === "string" ? sel.rp.replace(/,/g, "") : sel.rp,
-        ) || 0;
-
-      total_sp +=
-        Number(
-          typeof sel.sp === "string" ? sel.sp.replace(/,/g, "") : sel.sp,
-        ) || 0;
-    });
-
-    return {
-      rank: rankItem.rank,
-      total_rp,
-      total_sp,
-      total_rp_text: total_rp.toLocaleString("en-US"),
-      total_sp_text: total_sp.toLocaleString("en-US"),
-    };
-  });
-});
-
-/** 处理版本信息 */
-async function versionIteration() {
-  // 检查本地存储与本地文件中的version_timestamp是否一致（版本校验）
-  const file_v = await (await fetch("/v-verify.json")).json();
-  const local_v = localStorage.getItem("version_timestamp");
-  console.log(
-    `%c版本号v: ${local_v} %c(${local_v}[本地] -> ${file_v.version_timestamp}[更新])`,
-    "color: #339966",
-    "color: #999966",
-  );
-
-  // 版本不一致：清空本地存储中所有tree_data，替换新的version_timestamp
-  if (file_v.version_timestamp != local_v) {
-    country_code.forEach((el) => {
-      vehicle_type.forEach((sel) => localStorage.removeItem(`${el}_${sel}`));
-    });
-    localStorage.setItem("version_timestamp", file_v.version_timestamp);
-  }
-}
 
 onMounted(async () => {
-  await versionIteration();
   requestTreeData();
 });
 </script>
