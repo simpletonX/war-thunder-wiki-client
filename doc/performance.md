@@ -10,7 +10,7 @@
 ## 1. 状态管理响应机制（最关键）
 
 ### 1.1 `instantCaching` 把整棵树"换脸" → 全树重新渲染
-位置：`src/stores/tree_data.js`
+位置：`src/stores/tree_data_store.js`
 
 ```js
 function instantCaching(tree_data_, t_c, type) {
@@ -162,7 +162,7 @@ const copy_tree_data = JSON.parse(JSON.stringify(tree_data.value));
 ## 5. DOM、虚拟列表与样式开销
 
 ### 5.1 没有虚拟列表
-- 单屏可见 ~15 张卡片，但整棵树渲染的 DOM 节点数（`wt_tree_item × ~150`）每张又有 6~10 个子节点，合计 ~1500 节点。在 1300px 宽度下 SPA 单页可接受，但与 backdrop-filter 叠加（见 5.2）会进一步拖累。
+- 单屏可见 ~15 张卡片，但整棵树渲染的 DOM 节点数（`wt_tree_item × ~150`）每张又有 6~10 个子节点，合计 ~1500 节点。在 1440px 宽度下 SPA 单页可接受，但与 backdrop-filter 叠加（见 5.2）会进一步拖累。
 - 可使用 IntersectionObserver 把不在可视区的 rank 标记为 `content-visibility: auto;` 以让浏览器跳过其 layout/paint，单条 CSS 即可拿到不错收益。
 
 ### 5.2 backdrop-filter 与 mask-image 同时叠加

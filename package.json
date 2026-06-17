@@ -8,7 +8,6 @@
   },
   "scripts": {
     "dev": "vite",
-    "prebuild": "node ./prebuild/v-verify.cjs",
     "build": "vite build",
     "preview": "vite preview"
   },

@@ -20,14 +20,23 @@ export const useTreeDataStore = defineStore("tree_data", () => {
   }
 
   // 偏好设置
-  const settings = ref(
-    getStorage("settings", {
-      bg_img: "default", // 背景图像/视频
-      blur_number: "60", // 背景模糊度
-      multiple_mode: false, // 切换multiple载具交互模式
-      all_select_mode: false, // 切换全选仅选中第一个折叠载具模式
-    }),
-  );
+  const default_settings = {
+    // 背景图像/视频
+    bg_img: "s_leopard2_a4m",
+    // 背景模糊度
+    blur_number: "30",
+    // 启用左键折叠载具组时默认选中第一个折叠载具
+    multiple_mode: false,
+    // 启用全选仅选中第一个折叠载具
+    all_select_mode: false,
+    // 启用真实科技树模拟
+    true_tree_mode: false,
+  };
+  const settings_raw = getStorage("settings", {});
+  const settings = ref({
+    ...default_settings,
+    ...settings_raw,
+  });
 
   // 更新settings
   function updateSettings(key, value) {
@@ -75,8 +84,11 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     updateSelectedStateMapAllLocal();
   }
 
-  // 更新本地存储整个selected_state_map
-  function updateSelectedStateMapAllLocal(value = selected_state_map.value, updateState = false) {
+  // 更新整个selected_state_map的本地存储
+  function updateSelectedStateMapAllLocal(
+    value = selected_state_map.value,
+    updateState = false,
+  ) {
     setStorage(
       `${types.value.country_code}_${types.value.vehicle_type}_ssmap`,
       value,
@@ -129,16 +141,38 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     researchable_set.value = value;
   }
 
-  // 即时缓存
-  function instantCaching(tree_data_, t_c, type) {
-    localStorage.setItem(`${t_c}_${type}`, JSON.stringify(tree_data_));
+  // 全局加载动画组件状态
+  const loading_visible = ref(false);
+  let show_time = 0;
+  let hide_timer = null;
 
-    const newTreeData = localStorage.getItem(`${t_c}_${type}`);
-    updateTreeData(JSON.parse(newTreeData));
-  }
+  const MIN_DURATION = 1000;
+
+  const loading = {
+    show() {
+      clearTimeout(hide_timer);
+
+      loading_visible.value = true;
+      show_time = Date.now();
+    },
+
+    hide(callback) {
+      const elapsed = Date.now() - show_time;
+
+      if (elapsed >= MIN_DURATION) {
+        loading_visible.value = false;
+        callback && callback();
+        return;
+      }
+
+      hide_timer = setTimeout(() => {
+        loading_visible.value = false;
+        callback && callback();
+      }, MIN_DURATION - elapsed);
+    },
+  };
 
   return {
-    instantCaching,
     tree_data,
     updateTreeData,
     settings,
@@ -154,5 +188,7 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     total_stats,
     researchable_set,
     updateResearchableSet,
+    loading_visible,
+    loading,
   };
 });

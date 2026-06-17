@@ -1,5 +1,12 @@
 <template>
-  <public_mask_copy @click="close_mask" v-show="modelValue">
+  <div
+    v-if="modelValue"
+    class="mask- fixed inset-0 flex items-center justify-center z-[9998]"
+    :style="{
+      backgroundColor: `rgba(0,0,0,0.7)`,
+    }"
+    @click="close_mask"
+  >
     <div class="public_dialog_container" @click.stop>
       <div class="public_dialog_header">
         <slot name="header"></slot>
@@ -8,12 +15,11 @@
         <slot name="main"></slot>
       </div>
     </div>
-  </public_mask_copy>
+  </div>
 </template>
 
 <script setup>
-import { defineProps, defineEmits, ref } from "vue";
-import public_mask_copy from "@/components/public_mask_copy.vue";
+import { defineProps, defineEmits } from "vue";
 
 const props = defineProps(["modelValue"]);
 const emits = defineEmits(["update:modelValue"]);
@@ -39,5 +45,17 @@ function close_mask() {
 }
 .public_dialog_main {
   padding: 20px 22px 12px;
+}
+.mask- {
+  opacity: 1;
+  animation: opacity 0.2s;
+}
+@keyframes opacity {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 </style>

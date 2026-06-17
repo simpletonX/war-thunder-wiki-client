@@ -1,4 +1,6 @@
-import { useTreeDataStore } from "@/stores/tree_data";
+import { useTreeDataStore } from "@/stores/tree_data_store";
+import { storeToRefs } from "pinia";
+import { unlock_quantitys } from "@/utils/dict";
 
 // 右键选中当前列至当前item
 export function toggleSelectColumnAbove({
@@ -442,4 +444,242 @@ export function calculateRankStats(selected_state_map, vehicle_cost_map) {
   }
 
   return stats;
+}
+
+export function findShortestPathToVehicle({
+  targets = [],
+  planned_prems = [],
+  priority_column = [],
+} = {}) {
+  const treeDataStore = useTreeDataStore();
+  const { tree_data, selected_state_map, types } = storeToRefs(treeDataStore);
+
+  const countryCode = types.value.country_code;
+  const vehicleType = types.value.vehicle_type;
+
+  const targetIds = new Set(targets.map((v) => v.data_unit_id));
+  const plannedPremIds = new Set(planned_prems.map((v) => v.data_unit_id));
+
+  const resultSelected = {};
+  const requiredResearchIds = new Set();
+  const plannedPremiumIds = new Set();
+
+  const rankIndexMap = new Map();
+
+  tree_data.value.forEach((rankBlock, rankIndex) => {
+    rankIndexMap.set(rankBlock.rank, rankIndex);
+  });
+
+  function flattenResearch(rankBlock, rankIndex) {
+    const result = [];
+
+    rankBlock.researchable_vehicles.forEach((column, columnIndex) => {
+      column.forEach((node, rowIndex) => {
+        if (node.type === "multiple" && Array.isArray(node.children)) {
+          node.children.forEach((child, childIndex) => {
+            result.push({
+              ...child,
+              rank: rankBlock.rank,
+              rankIndex,
+              columnIndex,
+              rowIndex,
+              childIndex,
+              parent: node,
+              isChild: true,
+              isResearchable: true,
+            });
+          });
+        } else {
+          result.push({
+            ...node,
+            rank: rankBlock.rank,
+            rankIndex,
+            columnIndex,
+            rowIndex,
+            isChild: false,
+            isResearchable: true,
+          });
+        }
+      });
+    });
+
+    return result;
+  }
+
+  function flattenPremium(rankBlock, rankIndex) {
+    const result = [];
+
+    rankBlock.premium_vehicles?.forEach((column, columnIndex) => {
+      column.forEach((node, rowIndex) => {
+        result.push({
+          ...node,
+          rank: rankBlock.rank,
+          rankIndex,
+          columnIndex,
+          rowIndex,
+          isPremium: true,
+        });
+      });
+    });
+
+    return result;
+  }
+
+  const allResearch = [];
+  const allPremium = [];
+
+  tree_data.value.forEach((rankBlock, rankIndex) => {
+    allResearch.push(...flattenResearch(rankBlock, rankIndex));
+    allPremium.push(...flattenPremium(rankBlock, rankIndex));
+  });
+
+  const researchMap = new Map(allResearch.map((v) => [v.data_unit_id, v]));
+  const premiumMap = new Map(allPremium.map((v) => [v.data_unit_id, v]));
+
+  /**
+   * 目标节点路径：
+   * 同一列中，目标节点之前的所有 researchable 节点都必须选中。
+   */
+  function collectColumnPath(targetNode) {
+    const rankBlock = tree_data.value[targetNode.rankIndex];
+    const column =
+      rankBlock.researchable_vehicles[targetNode.columnIndex] || [];
+
+    for (const rawNode of column) {
+      if (rawNode.type === "multiple" && Array.isArray(rawNode.children)) {
+        for (const child of rawNode.children) {
+          requiredResearchIds.add(child.data_unit_id);
+
+          if (child.data_unit_id === targetNode.data_unit_id) {
+            return;
+          }
+        }
+      } else {
+        requiredResearchIds.add(rawNode.data_unit_id);
+
+        if (rawNode.data_unit_id === targetNode.data_unit_id) {
+          return;
+        }
+      }
+    }
+  }
+
+  for (const target of targets) {
+    const node = researchMap.get(target.data_unit_id);
+
+    if (!node) {
+      console.warn("目标节点不存在或不是 researchable_vehicles:", target);
+      continue;
+    }
+
+    collectColumnPath(node);
+  }
+
+  for (const prem of planned_prems) {
+    if (premiumMap.has(prem.data_unit_id)) {
+      plannedPremiumIds.add(prem.data_unit_id);
+    }
+  }
+
+  function getUnlockQuantity(rank) {
+    return unlock_quantitys?.[countryCode]?.[vehicleType]?.[rank] ?? 0;
+  }
+
+  function getPriorityScore(node) {
+    const index = priority_column.indexOf(node.columnIndex);
+
+    if (index === -1) {
+      return 9999;
+    }
+
+    return index;
+  }
+
+  /**
+   * 凑数排序：
+   * 1. 已经必选的节点不重复计费
+   * 2. 如果指定 priority_column，优先按列
+   * 3. multiple 子节点优先
+   * 4. RP 越低越优先
+   */
+  function sortCandidates(a, b) {
+    const pa = getPriorityScore(a);
+    const pb = getPriorityScore(b);
+
+    if (pa !== pb) return pa - pb;
+
+    if (a.isChild !== b.isChild) {
+      return a.isChild ? -1 : 1;
+    }
+
+    return (a.rp || 0) - (b.rp || 0);
+  }
+
+  /**
+   * 对某个 Rank 凑够 unlock_quantity
+   */
+  function fillRankUnlock(rankBlock, rankIndex) {
+    const unlockQuantity = getUnlockQuantity(rankBlock.rank);
+
+    if (!unlockQuantity) return;
+
+    const currentResearch = flattenResearch(rankBlock, rankIndex);
+    const currentPremium = flattenPremium(rankBlock, rankIndex);
+
+    let selectedCount = 0;
+
+    for (const node of currentResearch) {
+      if (requiredResearchIds.has(node.data_unit_id)) {
+        selectedCount++;
+      }
+    }
+
+    for (const node of currentPremium) {
+      if (plannedPremiumIds.has(node.data_unit_id)) {
+        selectedCount++;
+      }
+    }
+
+    const need = unlockQuantity - selectedCount;
+
+    if (need <= 0) return;
+
+    const candidates = currentResearch
+      .filter((node) => !requiredResearchIds.has(node.data_unit_id))
+      .sort(sortCandidates);
+
+    for (const node of candidates.slice(0, need)) {
+      requiredResearchIds.add(node.data_unit_id);
+    }
+  }
+
+  /**
+   * 只需要处理目标最高 Rank 之前的 Rank。
+   */
+  const maxTargetRankIndex = Math.max(
+    ...targets
+      .map((v) => researchMap.get(v.data_unit_id)?.rankIndex)
+      .filter((v) => typeof v === "number"),
+  );
+
+  for (let rankIndex = 0; rankIndex <= maxTargetRankIndex; rankIndex++) {
+    const rankBlock = tree_data.value[rankIndex];
+    fillRankUnlock(rankBlock, rankIndex);
+  }
+
+  for (const id of requiredResearchIds) {
+    resultSelected[id] = true;
+  }
+
+  for (const id of plannedPremiumIds) {
+    resultSelected[id] = true;
+  }
+
+  selected_state_map.value = resultSelected;
+
+  return {
+    selected_state_map: resultSelected,
+    research_ids: [...requiredResearchIds],
+    premium_ids: [...plannedPremiumIds],
+  };
 }

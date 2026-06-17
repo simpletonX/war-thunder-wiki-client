@@ -5,11 +5,20 @@
     @contextmenu.prevent.stop="automaticPlanning(item)"
   >
     <div
-      class="wt-tree-item w-[150px] h-[56px] mb-[30px]"
+      class="wt-tree-item w-[156px] h-[56px] mb-[30px]"
       :class="{
-        select_mode: totalSelectNum,
+        true_select_mode:
+          !selected_state_map[item.data_unit_id] &&
+          !isPremium &&
+          settings.true_tree_mode,
+        default_select_mode: !settings.true_tree_mode,
+        unactive_mode: totalSelectNum,
         selected: isItemSelected(item),
-        [item.class_name]: true,
+        single_item: item.type == 'single',
+        [item.class_name || 'default']: true,
+      }"
+      :style="{
+        marginTop: `${86 * (helicopters?.move_bottom || 0)}px`,
       }"
       :title="item.items ? 'Click to expand the folded vehicle' : ''"
       :data_unit_id="item.data_unit_id"
@@ -54,8 +63,8 @@
         >
           <span class="text-[12px] mr-[1px]">{{
             item.items
-              ? item.items[0].rp_view || "free"
-              : item.rp_view || "free"
+              ? item.items[0].rp_view || "初始"
+              : item.rp_view || "初始"
           }}</span>
           <img :src="`/static/rp.png`" class="w-[16px]" />
         </div>
@@ -66,56 +75,140 @@
         >
           <span class="text-[12px] mr-[1px]">{{
             item.items
-              ? item.items[0].sp_view || "free"
-              : item.sp_view || "free"
+              ? item.items[0].sp_view || "初始"
+              : item.sp_view || "初始"
           }}</span>
           <img :src="`/static/war-points.png`" class="w-[18px]" />
         </div>
-        <!-- 左上角梯形 -->
-        <div
-          class="trapezoid"
-          :class="item.class_name"
-          :hidden="item.type == 'single'"
-        >
-          <div class="left-border-fill"></div>
-          <div class="right-tip"></div>
-        </div>
+        <!-- group-梯形角 -->
+        <div class="trapezoid" v-if="item.type == 'multiple'"></div>
+
         <!-- 护身符 -->
-        <div class="amulet" :hidden="item.class_name != 'prem'">
+        <div class="amulet" v-if="item.class_name == 'prem'">
           <img :src="`/static/premium_vehicle.png`" alt="" />
         </div>
 
-        <!-- 金鹰背景 -->
-        <div class="gold" :hidden="item.class_name != 'prem'"></div>
+        <!-- 选中态显示图标 -->
+        <PhArrowFatLineUp class="selected-icon" :size="17" />
 
-        <!-- 银狮背景 -->
-        <div class="war-points" :hidden="item.class_name != ''"></div>
+        <!-- 点击打开详情 -->
+        <div
+          class="jump-details flex justify-center items-center text-[12px]"
+          @click.prevent.stop="jump_details(item)"
+        >
+          <span class="mt-[2px] mr-[1px]">跳转详情</span>
+          <PhArrowElbowDownRight :size="16" />
+        </div>
       </div>
 
-      <!-- 指向箭头 -->
+      <!-- 直升机指向箭头 -->
+      <template v-if="types.vehicle_type == 'helicopters'">
+        <div
+          class="arrow_down absolute left-1/2 bottom-0 w-[8px]"
+          :style="{
+            top: '59px',
+            height: `${helicopters_arrowHeight - 13}px`,
+            transform: 'translateX(-50%)',
+          }"
+        >
+          <!-- 左下关联箭头 -->
+          <div
+            class="arrow_down arrow-next-left"
+            v-if="helicopters?.has_next_left_item"
+          >
+            <div
+              class="arrow_down top-rect relative w-[8px]"
+              :style="{
+                height: helicopters?.has_next_item ? '0px' : '20px',
+              }"
+            >
+              <div
+                class="arrow_down left-long-rect absolute h-[8px] w-[173px] left-[-173px] bottom-0"
+                :style="{
+                  bottom: helicopters?.has_next_item ? '-12px' : '0',
+                }"
+              >
+                <div
+                  class="arrow_down bottom-rect absolute w-[8px] left-0"
+                  :style="{
+                    height: helicopters?.cross_level && !helicopters?.placeholder_item
+                      ? `${37 * helicopters?.cross_level}px`
+                      : '5px',
+                    bottom: helicopters?.cross_level && !helicopters?.placeholder_item
+                      ? `${-37 * helicopters?.cross_level}px`
+                      : '-5px',
+                  }"
+                >
+                  <div
+                    class="arrow-tip w-0 h-0 absolute bottom-[-4px] left-[-3px]"
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 右下关联箭头 -->
+          <div
+            class="arrow_down arrow-next-left"
+            v-if="helicopters?.has_next_right_item"
+          >
+            <div
+              class="arrow_down top-rect relative w-[8px]"
+              :style="{
+                height: helicopters?.has_next_item ? '0px' : '20px',
+              }"
+            >
+              <div
+                class="arrow_down left-long-rect absolute h-[8px] w-[173px] right-[-173px] bottom-0"
+                :style="{
+                  bottom: helicopters?.has_next_item ? '-12px' : '0',
+                }"
+              >
+                <div
+                  class="arrow_down bottom-rect absolute w-[8px] right-0"
+                  :style="{
+                    height: helicopters?.cross_level && !helicopters?.placeholder_item
+                      ? `${37 * helicopters?.cross_level}px`
+                      : '5px',
+                    bottom: helicopters?.cross_level && !helicopters?.placeholder_item
+                      ? `${-37 * helicopters?.cross_level}px`
+                      : '-5px',
+                  }"
+                >
+                  <div
+                    class="arrow-tip w-0 h-0 absolute bottom-[-4px] right-[-3px]"
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            v-if="helicopters?.has_next_item"
+            class="arrow-tip w-0 h-0 absolute bottom-[-4px] left-[-3px]"
+          ></div>
+        </div>
+      </template>
+      <!-- 右水平关联箭头 -->
       <div
-        v-if="
-          !isPremium &&
-          arrowHeight !== 0 &&
-          types.vehicle_type != 'helicopters'
-        "
-        class="absolute left-1/2 bottom-0 w-[8px] bg-[#6a8082]"
+        class="arrow_down arrow-right absolute right-[-11px] top-[22px]"
+        v-if="helicopters?.has_right_item"
+      >
+        <div class="arrow_down top-rect relative w-[9px] h-[8px]">
+          <div
+            class="arrow-tip tip-right w-0 h-0 absolute bottom-[-2.5px] right-[-13px]"
+          ></div>
+        </div>
+      </div>
+      <!-- 其它通用指向箭头 -->
+      <div
+        v-else-if="!isPremium && arrowHeight !== 0 && !is_terminal"
+        class="arrow_down absolute left-1/2 bottom-0 w-[8px]"
         :style="{
           top: '59px',
           height: `${arrowHeight - 13}px`,
           transform: 'translateX(-50%)',
         }"
       >
-        <!-- 底三角 -->
-        <div
-          class="arrow-tip w-0 h-0 absolute bottom-[-4px] left-[-3px]"
-          style="
-            border-left: 7px solid transparent;
-            border-right: 7px solid transparent;
-            /* border-top: 8px solid #6a8082; */
-            border-top: 6px solid #6a8082;
-          "
-        ></div>
+        <div class="arrow-tip w-0 h-0 absolute bottom-[-4px] left-[-3px]"></div>
       </div>
     </div>
 
@@ -124,12 +217,18 @@
       <transition name="fade">
         <div class="folding-vehicle" v-show="showStatus">
           <div
-            class="wt-tree-item w-[150px] h-[56px] mb-[30px] cursor-pointer"
+            class="wt-tree-item w-[156px] h-[56px] mb-[30px] cursor-pointer"
             v-for="(subItem, subIndex) in item.items"
             :class="{
-              select_mode: totalSelectNum,
+              true_select_mode:
+                !selected_state_map[subItem.data_unit_id] &&
+                !isPremium &&
+                settings.true_tree_mode,
+              default_select_mode: !settings.true_tree_mode,
+              unactive_mode: totalSelectNum,
               selected: selected_state_map[subItem.data_unit_id],
-              [subItem.class_name]: true,
+              single_item: subItem.type == 'single',
+              [subItem.class_name || 'default']: true,
             }"
             @click="clickTrigger(subItem)"
             @contextmenu.prevent.stop="automaticPlanning(subItem)"
@@ -160,7 +259,7 @@
               v-if="currentPointsType == 1 && isDefault"
             >
               <span class="text-[12px] mr-[1px]">{{
-                subItem.rp_view || "free"
+                subItem.rp_view || "初始"
               }}</span>
               <img :src="`/static/rp.png`" class="w-[16px]" />
             </div>
@@ -170,14 +269,14 @@
               v-if="currentPointsType == 2 && isDefault"
             >
               <span class="text-[12px] mr-[1px]">{{
-                subItem.sp_view || "free"
+                subItem.sp_view || "初始"
               }}</span>
               <img :src="`/static/war-points.png`" class="w-[18px]" />
             </div>
 
             <div
               v-if="!isPremium && subIndex < item.items.length - 1"
-              class="absolute left-1/2 bottom-0 w-[8px] bg-[#6a8082] cursor-default"
+              class="arrow_down absolute left-1/2 bottom-0 w-[8px] bg-[#6a8082] cursor-default"
               @click.stop="() => {}"
               :style="{
                 top: '59px',
@@ -188,13 +287,19 @@
               <!-- 底三角 -->
               <div
                 class="arrow-tip w-0 h-0 absolute bottom-[-4px] left-[-3px]"
-                style="
-                  border-left: 7px solid transparent;
-                  border-right: 7px solid transparent;
-                  /* border-top: 8px solid #6a8082; */
-                  border-top: 6px solid #6a8082;
-                "
               ></div>
+            </div>
+
+            <!-- 选中态显示图标 -->
+            <PhArrowFatLineUp class="selected-icon" :size="17" />
+
+            <!-- 点击打开详情 -->
+            <div
+              class="jump-details flex justify-center items-center text-[12px]"
+              @click.prevent.stop="jump_details(subItem)"
+            >
+              <span class="mt-[2px] mr-[1px]">跳转详情</span>
+              <PhArrowElbowDownRight :size="16" />
             </div>
           </div>
         </div>
@@ -204,14 +309,13 @@
 </template>
 
 <script setup>
-import { computed, defineProps, ref, watch } from "vue";
+import { computed, defineProps, onMounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { usePublicMaskStore } from "@/stores/public_mask";
 import { toggleSelectColumnAbove } from "@/utils/treeDataUtils";
-import { useTreeDataStore } from "@/stores/tree_data";
-
-const treeDataStore = useTreeDataStore();
-const { settings, selected_state_map, tree_data, types } = storeToRefs(treeDataStore);
+import { useTreeDataStore } from "@/stores/tree_data_store";
+import { PhArrowFatLineUp, PhArrowElbowDownRight } from "@phosphor-icons/vue";
+import { terminal_vehicles } from "@/utils/dict";
 
 const props = defineProps({
   /**
@@ -227,8 +331,20 @@ const props = defineProps({
   // 当前载具箭头计算数据元信息
   arrow_points: { type: Object, required: false },
 });
-const emit = defineEmits(["updateItemSelected"]);
-const totalSelectNum = computed(() => !!Object.keys(selected_state_map.value).length);
+const emit = defineEmits(["jumpItemDetailPage"]);
+
+const treeDataStore = useTreeDataStore();
+const { settings, selected_state_map, tree_data, types } =
+  storeToRefs(treeDataStore);
+const is_terminal = computed(
+  () =>
+    terminal_vehicles[types.value.country_code][types.value.vehicle_type][
+      props.item.data_unit_id
+    ],
+);
+const totalSelectNum = computed(
+  () => !!Object.keys(selected_state_map.value).length,
+);
 
 const public_mask = usePublicMaskStore();
 // 折叠载具面板显示状态
@@ -267,7 +383,7 @@ function clickTrigger(item) {
   }
 }
 
-/** 计算箭头的高度 */
+/** 计算其它vehicle_type箭头的高度 */
 const arrowHeight = ref(0);
 function calcArrowHeight() {
   const ITEM_HEIGHT = 56; // 单个 item 的高度（px）
@@ -283,6 +399,34 @@ function calcArrowHeight() {
     itemHeightSum + rankHeightSum + has_next_item * ITEM_MARGIN; // 箭头实际的总长度
 }
 calcArrowHeight();
+
+/** 计算直升机箭头的高度 */
+const helicopters_arrowHeight = ref(0);
+const helicopters =
+  terminal_vehicles[types.value.country_code][types.value.vehicle_type][
+    props.item.data_unit_id
+  ];
+function calcHelicoptersArrowHeight() {
+  console.log(helicopters);
+  const ITEM_HEIGHT = 56; // 单个 item 的高度（px）
+  const ITEM_MARGIN = 30; // 每个 item 的下外边距（px）
+  const RANK_MARGIN = 40; // 等级区域div之间的额外间距（px）
+
+  if (!helicopters) return;
+  const {
+    cross_level,
+    placeholder_item,
+    has_next_item,
+    has_next_left_item,
+    has_right_item,
+  } = helicopters;
+  const itemHeightSum = placeholder_item * (ITEM_HEIGHT + ITEM_MARGIN); // item高度+下外边距之和
+  const rankHeightSum = cross_level * RANK_MARGIN; // 跨行的总外边距之和
+
+  helicopters_arrowHeight.value =
+    itemHeightSum + rankHeightSum + has_next_item * ITEM_MARGIN; // 箭头实际的总长度
+}
+calcHelicoptersArrowHeight();
 
 /** 监听public_mask.visible的值，让showStatus与其同步 */
 watch(
@@ -318,6 +462,11 @@ function automaticPlanning(item) {
     selected_state_map,
   });
 }
+
+// 跳转详情页
+function jump_details(item) {
+  emit("jumpItemDetailPage", item);
+}
 </script>
 
 <style scoped>
@@ -331,40 +480,7 @@ function automaticPlanning(item) {
   left: -25px;
   padding: 25px 25px 0;
 }
-.wt-tree-item {
-  border: 1px solid #495a5f;
-  border-top: 2px solid #6a7b82;
-  box-shadow: 0 2px 3px 1px rgba(0, 0, 0, 0.1);
-  background-color: rgb(66, 78, 90);
-  position: relative;
-  user-select: none;
-  top: 0;
-  transition: 0.3s;
-}
-.wt-tree-item.select_mode {
-  opacity: 0.4;
-}
-.wt-tree-item.selected {
-  opacity: 1;
-}
-/* .wt-tree-item::after {
-  content: "";
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  box-shadow: ;
-} */
-.wt-tree-item.prem {
-  border: 1px solid #57441e;
-  border-top: 2px solid #8b6626;
-  background-color: #594b20;
-  background-image: linear-gradient(to bottom, transparent, #372f15);
-}
-.wt-tree-item.squad {
-  border: 1px solid #497132;
-  border-top: 2px solid #588537;
-  background-color: #3b5734;
-}
+/* item背景点状压纹 */
 .wt-tree-item::before {
   content: "";
   position: absolute;
@@ -385,74 +501,202 @@ function automaticPlanning(item) {
   );
   opacity: 0.04; /* 👈 控制透明度 */
 }
-.wt-tree-item .icon img {
-  height: 46px;
-}
-/* 左上角梯形 */
-.trapezoid {
-  width: 30px;
-  height: 6px;
+.wt-tree-item {
+  border: 1px solid #495a5f;
+  border-top: 2px solid #6a7b82;
+  box-shadow: 0 2px 3px 1px rgba(0, 0, 0, 0.1);
   background-color: rgb(66, 78, 90);
-  /* background-color: #fff; */
-  position: absolute;
-  top: -6px;
-  left: 0;
-  border-top: 2px solid #62737a;
+  position: relative;
+  user-select: none;
+  top: 0;
+  transition: 0.2s;
+  /* 真实还原模式下的银币载具未选中状态样式 */
+  /* item背景色 */
+  --true_mode_item_bgc: #300d13;
+  /* item边框色 */
+  --true_mode_item_border: #501521;
+  /* item顶边框色 */
+  --true_mode_item_border_top: #8a1129;
+  /* item指向箭头色 */
+  --true_mode_item_arrow: #6d1829;
+
+  /* 载具选中状态样式 */
+  /* 普通载具选中状态图标主题色 */
+  --default-icon-bg: rgba(185, 215, 243, 0.5);
+  /* 高级载具选中状态图标主题色 */
+  --prem-icon-bg: rgba(255, 211, 124, 0.5);
+  /* 高级载具选中状态图标主题色 */
+  --squad-icon-bg: rgba(126, 227, 31, 0.5);
+  /* 普通载具选中状态顶边框色 */
+  --default-selected_border_top: #adadad;
+  /* 高级载具选中状态顶边框色 */
+  --prem-selected_border_top: #daac50;
+  /* 联队载具选中状态顶边框色 */
+  --squad-selected_border_top: #7ecd46;
 }
-.trapezoid.prem {
+/* 高级载具未选中状态配色 */
+.wt-tree-item.prem {
+  border: 1px solid #57441e;
+  border-top: 2px solid #8b6626;
   background-color: #594b20;
-  border-top: 2px solid #7b591f;
+  background-image: linear-gradient(to bottom, transparent, #372f15);
 }
-.trapezoid::before {
+/* 联队载具未选中状态配色 */
+.wt-tree-item.squad {
+  border: 1px solid #40642c;
+  border-top: 2px solid #588537;
+  background-color: #3b5734;
+}
+.wt-tree-item.selected {
+  /* border-image: linear-gradient(to right, #4e4e4e, #adadad, #53555a) 1; */
+  border-top-color: var(--default-selected_border_top);
+}
+.wt-tree-item.prem.selected {
+  /* border-image: linear-gradient(to right, #764f0a, #daac50, #5d3c02) 1; */
+  border-top-color: var(--prem-selected_border_top);
+}
+.wt-tree-item.squad.selected {
+  /* border-image: linear-gradient(to right, #3d6724, #7ecd46, #2a6c04) 1; */
+  border-top-color: var(--squad-selected_border_top);
+}
+.selected-icon {
+  position: absolute;
+  left: 2px;
+  top: 1px;
+  opacity: 0;
+}
+.wt-tree-item.selected .selected-icon {
+  opacity: 1;
+  fill: var(--default-icon-bg);
+}
+.wt-tree-item.selected.prem .selected-icon {
+  fill: var(--prem-icon-bg);
+}
+.wt-tree-item.selected.squad .selected-icon {
+  fill: var(--squad-icon-bg);
+}
+.wt-tree-item.selected::after {
   content: "";
   position: absolute;
-  inset: 0;
-  /* background-image: url("/static/6417ea1848ed628c46d5_white.png"); */
-  opacity: 1; /* 👈 控制透明度 */
+  width: 22px;
+  height: 25px;
+  top: 0;
+  left: 0;
+  background-image: linear-gradient(
+    to bottom,
+    var(--default-icon-bg),
+    transparent
+  );
 }
-.left-border-fill {
+.wt-tree-item.prem.selected::after {
+  background-image: linear-gradient(
+    to bottom,
+    var(--prem-icon-bg),
+    transparent
+  );
+}
+.wt-tree-item.squad.selected::after {
+  background-image: linear-gradient(
+    to bottom,
+    var(--squad-icon-bg),
+    transparent
+  );
+}
+.wt-tree-item.unactive_mode:not(.true_select_mode) {
+  opacity: 0.4;
+}
+.wt-tree-item.selected {
+  opacity: 1 !important;
+}
+.trapezoid {
+  width: 30%;
+  height: 5px;
   position: absolute;
   left: -1px;
-  top: -2px;
-  width: 1px;
-  height: 7px;
-  background-color: #3d4c51;
+  top: -5px;
+  background-color: #6a7b82;
+  clip-path: polygon(0 0, 85% 0, 100% 100%, 0 100%);
 }
-.trapezoid.prem .left-border-fill {
-  background-color: #5b471f;
+.wt-tree-item.selected .trapezoid {
+  background-color: var(--default-selected_border_top);
 }
-.right-tip {
-  width: 7px;
-  height: 0;
+.wt-tree-item.prem .trapezoid {
+  background-color: #8b6626;
+}
+.wt-tree-item.prem.selected .trapezoid {
+  background-color: var(--prem-selected_border_top);
+}
+.wt-tree-item.squad .trapezoid {
+  background-color: #588537;
+}
+.wt-tree-item.squad.selected .trapezoid {
+  background-color: var(--squad-selected_border_top);
+}
+.arrow_down {
+  background-color: #6a8082;
+}
+.wt-tree-item.true_select_mode:not(.selected) .arrow_down {
+  background-color: var(--true_mode_item_arrow);
+}
+.arrow-tip {
+  border-left: 7px solid transparent;
   border-right: 7px solid transparent;
-  border-bottom: 6px solid #62737a;
-  position: absolute;
-  right: -7px;
-  top: -2px;
-  z-index: 100;
+  border-top: 6px solid #6a8082;
 }
-.trapezoid.prem .right-tip {
-  border-bottom: 6px solid #7b591f;
+.arrow-tip.tip-right {
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 6px solid #6a8082;
 }
-.right-tip::after {
-  content: "";
-  width: 4px;
-  height: 0;
-  border-right: 4px solid transparent;
-  border-bottom: 4px solid rgb(66, 78, 90);
-  position: absolute;
-  left: 0;
-  bottom: -6px;
+.wt-tree-item.true_select_mode:not(.selected) .arrow-tip {
+  border-top: 6px solid var(--true_mode_item_arrow);
 }
-.trapezoid.prem .right-tip::after {
-  content: "";
-  width: 4px;
-  height: 0;
-  border-right: 4px solid transparent;
-  border-bottom: 4px solid #594b20;
+.wt-tree-item.true_select_mode:not(.selected) {
+  background-color: var(--true_mode_item_bgc);
+  border-color: var(--true_mode_item_border);
+  border-top-color: var(--true_mode_item_border_top);
+}
+.wt-tree-item.true_select_mode:not(.selected) .trapezoid {
+  background-color: var(--true_mode_item_border_top);
+}
+.wt-tree-item.true_select_mode:not(.selected) .icon {
+  opacity: 0.3;
+}
+.jump-details {
   position: absolute;
-  left: 0;
-  bottom: -6px;
+  bottom: -25px;
+  left: calc(50% - 40px);
+  height: 24px;
+  width: 80px;
+  background-image: linear-gradient(
+    to bottom,
+    var(--default-icon-bg),
+    transparent
+  );
+  display: none;
+  z-index: 10;
+  padding-bottom: 2px;
+}
+.wt-tree-item.prem .jump-details {
+  background-image: linear-gradient(
+    to bottom,
+    var(--prem-icon-bg),
+    transparent
+  );
+}
+.wt-tree-item.squad .jump-details {
+  background-image: linear-gradient(
+    to bottom,
+    var(--squad-icon-bg),
+    transparent
+  );
+}
+/* 其它样式 + ------------------------------------------------------- + */
+.wt-tree-item.single_item:hover .jump-details {
+  display: flex;
+}
+.wt-tree-item .icon img {
+  height: 46px;
 }
 .amulet {
   position: absolute;
@@ -462,55 +706,11 @@ function automaticPlanning(item) {
 .amulet img {
   width: 20px;
 }
-.gold {
-  /* background-image: url(/static/gold-.png); */
-  background-repeat: no-repeat;
-  background-position: right top;
-  background-size: auto 135%;
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  top: 0;
-  right: 0;
-  z-index: 0;
-  opacity: 0.1;
-}
-.war-points {
-  /* background: url(/static/war-points.png) no-repeat right top; */
-  background-size: auto 135%;
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  top: 0;
-  right: 0;
-  z-index: 0;
-  opacity: 0.02;
-}
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
 .wt-tree-item .title,
 .folding-vehicle .wt-tree-item .title {
   max-width: 90%;
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
-}
-.wt-tree-item.selected {
-  border-image: linear-gradient(to right, #4e4e4e, #adadad, #53555a) 1;
-  box-shadow: #aaaaaa 0 20px 80px -15px;
-}
-.wt-tree-item.prem.selected {
-  border-image: linear-gradient(to right, #764f0a, #daac50, #5d3c02) 1;
-  box-shadow: #ae8635 0 20px 80px -15px;
-}
-.wt-tree-item.squad.selected {
-  border-image: linear-gradient(to right, #3d6724, #7ecd46, #2a6c04) 1;
-  box-shadow: #66b22f 0 20px 80px -15px;
 }
 </style>

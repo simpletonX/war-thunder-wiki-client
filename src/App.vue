@@ -36,17 +36,17 @@
     <!-- <div class="fill-placeholder h-[66px]"></div> -->
     <wt_type_tabs
       :vt="types.vehicle_type"
-      @update:vt="(val) => updateTypes('vehicle_type', val)"
       v-model:pt="currentPointsType"
-      @clearCache="clearCache"
+      @update:vt="(val) => updateTypes('vehicle_type', val)"
+      @clear="requestTreeData"
     />
 
     <!-- 科技树主体 -->
-    <div class="wt-tree w-[1300px] mx-auto relative">
+    <div class="wt-tree w-[1350px] mx-auto relative">
       <!-- 遮罩层，解决因backdrop-filter带来的包含块对fixed定位的影响 -->
       <div class="backdrop-filter"></div>
 
-      <div class="tree-area pb-[140px]" v-if="tree_data?.length">
+      <div class="tree-area pb-[140px] pt-[22px]" v-if="tree_data?.length">
         <!-- 每个等级 -->
         <!-- 全局通用遮罩层 -->
         <public_mask />
@@ -55,21 +55,25 @@
           v-for="(rankItem, rankIndex) in tree_data"
           :key="rankItem.rank"
         >
-          <div class="rank-title absolute mt-2 flex items-center">
-            <span class="text-[#c3c3c3bf] text-[13px]"
-              >Rank {{ rankItem.rank }}</span
-            >
+          <div
+            class="absolute left-0 top-0 rank-title w-[70%] flex justify-between items-center"
+          >
+            <div class="rank-rpsp-total flex items-center">
+              <span class="text-[#c3c3c3bf] text-[13px]"
+                >Rank {{ rankItem.rank }}</span
+              >
 
-            <div class="flex rank-sprps text-[13px] ml-5">
-              <span class="rps">{{
-                parseNumber(rankStats[rankItem.rank].rp, true)
-              }}</span>
-              <img :src="`/static/rp.png`" class="w-[16px] mr-1" />
-              <span>,</span>
-              <span class="sps ml-2">{{
-                parseNumber(rankStats[rankItem.rank].sp, true)
-              }}</span>
-              <img :src="`/static/war-points.png`" class="w-[18px]" />
+              <div class="flex rank-sprps text-[13px] ml-4">
+                <span class="rps">{{
+                  parseNumber(rankStats[rankItem.rank]?.rp, true)
+                }}</span>
+                <img :src="`/static/rp.png`" class="w-[16px] mr-1" />
+                <span>/</span>
+                <span class="sps ml-2">{{
+                  parseNumber(rankStats[rankItem.rank]?.sp, true)
+                }}</span>
+                <img :src="`/static/war-points.png`" class="w-[18px]" />
+              </div>
             </div>
           </div>
 
@@ -78,19 +82,18 @@
             class="unlock-quantity absolute top-[calc(50%-15px)] left-[8px] text-[12px] w-[30px] h-[30px] bg-[rgba(255,255,255,.05)] rounded-full flex justify-center items-center text-[rgba(255,255,255,.75)]"
           >
             {{
-              rankStats[rankItem.rank].count > current_uq[rankItem.rank]
+              rankStats[rankItem.rank]?.count > current_uq[rankItem.rank]
                 ? current_uq[rankItem.rank]
-                : rankStats[rankItem.rank].count
+                : rankStats[rankItem.rank]?.count
             }}/{{ current_uq[rankItem.rank] }}
           </div>
-
           <div class="wt-tree-instance pr-4 pl-12 flex justify-between">
             <!-- 普通载具 -->
             <div
               class="researchable-instance flex justify-center w-full pt-[40px]"
             >
               <div
-                class="wt-tree-column mx-2 w-[150px]"
+                class="wt-tree-column mx-2 w-[156px]"
                 v-for="(columnItem, colIndex) in rankItem.researchable_vehicles"
                 :key="`r-col-${rankIndex}-${colIndex}`"
               >
@@ -102,6 +105,7 @@
                   :isDefault="true"
                   :currentPointsType="currentPointsType"
                   :arrow_points="arrow_points_map[item.data_unit_id]"
+                  @jumpItemDetailPage="jumpItemDetailPage"
                 />
                 <!-- 如果 columnItem 为空数组依旧会渲染占位列（无 item） -->
               </div>
@@ -112,7 +116,7 @@
             <!-- 高级载具 -->
             <div class="premium-instance flex justify-between pt-[40px]">
               <div
-                class="wt-tree-column mx-2 w-[150px]"
+                class="wt-tree-column mx-2 w-[156px]"
                 v-for="(columnItem, colIndex) in rankItem.premium_vehicles"
                 :key="`p-col-${rankIndex}-${colIndex}`"
               >
@@ -123,6 +127,7 @@
                   :isPremium="true"
                   :currentPointsType="currentPointsType"
                   :arrow_points="arrow_points_map[item.data_unit_id]"
+                  @jumpItemDetailPage="jumpItemDetailPage"
                 />
               </div>
             </div>
@@ -146,9 +151,6 @@
     </div>
   </div>
 
-  <!-- 全局通用弹出通知框 -->
-  <public_message_dialog />
-
   <!-- 当前数据库更新时间与版本号 -->
   <div
     class="current-database fixed bottom-2 left-[46px] text-white flex justify-center items-center text-[12px] opacity-60 w-full"
@@ -157,6 +159,13 @@
     <span class="ml-2">2.55.1.142</span>
     <span class="ml-3">-> 2026/06/11</span>
   </div>
+
+  <!-- 顶级加载动画 -->
+  <public_loading :modelValue="loading_visible" />
+
+  <!-- 载具详情页组件 -->
+  <wt_item_details v-model="detail_visible" :item="current_detail_item">
+  </wt_item_details>
 </template>
 
 <script setup>
@@ -165,18 +174,20 @@ import wt_tree_item from "@/components/wt_tree_item.vue";
 import wt_country_tabs from "@/components/wt_country_tabs.vue";
 import wt_type_tabs from "@/components/wt_type_tabs.vue";
 import public_mask from "@/components/public_mask.vue";
-import public_message_dialog from "@/components/public_message_dialog.vue";
-import { useTreeDataStore } from "@/stores/tree_data";
+import { useTreeDataStore } from "@/stores/tree_data_store";
 import { storeToRefs } from "pinia";
 
 import {
   createArrowPointsMap,
   createVehicleCostMap,
   parseNumber,
+  findShortestPathToVehicle,
 } from "@/utils/treeDataUtils";
 import { createResearchableSet } from "@/utils/treeDataUtils";
 import { unlock_quantitys, preset_wallpapers } from "@/utils/dict";
 import { getTreeDataLocal } from "./api/tree_data";
+import Wt_item_details from "./components/wt_item_details.vue";
+import public_loading from "./components/public_loading.vue";
 
 /** stores初始化 */
 const treeDataStore = useTreeDataStore();
@@ -185,8 +196,11 @@ const {
   updateTypes,
   updateVehicleCostMap,
   updateResearchableSet,
+  updateSelectedStateMapAllLocal,
+  loading,
 } = treeDataStore;
-const { tree_data, settings, types, rankStats } = storeToRefs(treeDataStore);
+const { tree_data, settings, types, rankStats, loading_visible } =
+  storeToRefs(treeDataStore);
 
 const current_bg_img = computed(() => {
   return (
@@ -204,15 +218,32 @@ function createArrowPoints(tree_data) {
 
 /** 请求tree_data数据 */
 async function requestTreeData() {
+  loading.show();
   // const res = await getTreeDataJsdelivr(types.value);
   const res = await getTreeDataLocal(types.value);
-  updateTreeData(res);
-  // 创建Researchable集合
-  updateResearchableSet(createResearchableSet(res));
-  // 创建指向箭头元数据映射
-  createArrowPoints(res);
-  // 创建RP/SP元数据映射
-  updateVehicleCostMap(createVehicleCostMap(res));
+
+  loading.hide(() => {
+    // 更新tree_data到store
+    updateTreeData(res);
+    // 创建Researchable集合
+    updateResearchableSet(createResearchableSet(res));
+    // 创建指向箭头元数据映射（直升机除外）
+    if (types.value.vehicle_type == "helicopters") {
+      arrow_points_map.value = {};
+    } else {
+      createArrowPoints(res);
+    }
+    // 创建RP/SP元数据映射
+    updateVehicleCostMap(createVehicleCostMap(res));
+
+    const result = findShortestPathToVehicle({
+      targets: [{ data_unit_id: "fr_leclerc_azur", rank: "VIII" }],
+      planned_prems: [{ data_unit_id: "fr_leopard_2a4nl_les", rank: "VII" }],
+      priority_column: [3, 2],
+    });
+    console.log(result.selected_state_map);
+    updateSelectedStateMapAllLocal(result.selected_state_map, true);
+  });
 }
 
 /** 切换currentCountry/currentVehicleType时进行requestTreeData，更新当前tree_data */
@@ -222,6 +253,27 @@ watch(types, () => requestTreeData(), { deep: true });
 const current_uq = computed(
   () => unlock_quantitys[types.value.country_code][types.value.vehicle_type],
 );
+
+const detail_visible = ref(false);
+const current_detail_item = ref({
+  type: "single",
+  title: "Leopard 2 (PzBtl 123)",
+  vehicle_icon:
+    "https://static.encyclopedia.warthunder.com/slots/germ_leopard_2a4_pzbtl_123.png",
+  br: "10.7",
+  rp: 0,
+  rp_view: 0,
+  sp: 0,
+  sp_view: 0,
+  data_unit_id: "germ_leopard_2a4_pzbtl_123",
+  class_name: "prem",
+  main_role: "Medium tank",
+});
+// 打开item-detail-page组件，跳过iframe请求并显示详情页
+function jumpItemDetailPage(item) {
+  current_detail_item.value = item;
+  detail_visible.value = true;
+}
 
 onMounted(async () => {
   requestTreeData();
@@ -237,7 +289,7 @@ onMounted(async () => {
 }
 
 .container-main {
-  width: 1300px;
+  width: 1350px;
   height: 100vh;
   background-image: linear-gradient(
     to bottom,
@@ -338,5 +390,11 @@ onMounted(async () => {
 .vertical-split-line {
   width: 1px;
   background-color: rgba(255, 255, 255, 0.15);
+}
+
+.rank-rpsp-total {
+  padding: 1px 17px 0 8px;
+  height: 28px;
+  position: relative;
 }
 </style>

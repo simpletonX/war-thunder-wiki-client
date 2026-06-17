@@ -123,7 +123,7 @@ src/
     - 左键 → 单击 single 直接 emit `updateItemSelected`；点击 multiple 折叠组：若 `multiple_mode=true` 走 `multipleEvent` 单击选首项 / 双击展开；否则展开 `showStatus=true` 并打开半透明 mask。
     - 右键 → `automaticPlanning(item)` → `toggleSelectColumnAbove`（同列向上选中）。
   - 派生：`calcArrowHeight()` 把 `arrow_points` 转成像素高度，渲染指向下一级载具的箭头。`watch(public_mask.visible)` 在 mask 关闭时收起折叠列表。
-- **`wt_country_tabs.vue`**：左侧 10 个国家的 SVG 图标列表，单击 emit `update:modelValue`；维护 1300px 主区域左侧 fixed 位置（`top: calc(50% - 330px)`）。
+- **`wt_country_tabs.vue`**：左侧 10 个国家的 SVG 图标列表，单击 emit `update:modelValue`；维护 1440px 主区域左侧 fixed 位置（`top: calc(50% - 330px)`）。
 - **`wt_type_tabs.vue`**（功能聚合栏）：
   - 顶部 5 个军种 tab；中央"当前总计"面板（`formatToWan` 把 RP/SP 缩成"X.X 万"）；右侧 偏好设置 / 导出图像（已隐藏）/ 缓存修复 / 加群按钮。
   - 偏好设置弹窗用 reka-ui 的 Select、Checkbox、NumberField、Tooltip 组合：背景壁纸、模糊度、`multiple_mode`、`all_select_mode`。

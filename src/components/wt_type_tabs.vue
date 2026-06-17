@@ -52,16 +52,16 @@
 
         <div
           class="cursor-pointer flex items-center mr-5"
-          @click="exportToImage"
+          @click="exportToSelectedMap"
         >
           <!-- <img :src="`/static/local.svg`" class="w-[16px]" /> -->
           <div class="cirle bg-[#ffbc2e]"></div>
-          <span class="text-[14px] ml-1">导出图像</span>
+          <span class="text-[14px] ml-1">方案管理</span>
         </div>
         <div class="cursor-pointer flex items-center mr-5" @click="clearCache">
           <!-- <img :src="`/static/clear_cache.svg`" class="w-[18px]" /> -->
           <div class="cirle bg-[#28c840]"></div>
-          <span class="text-[14px] ml-1">缓存修复</span>
+          <span class="text-[14px] ml-1">清理缓存</span>
         </div>
 
         <button class="cir-btn" type="button" @click="join_visible = true">
@@ -183,6 +183,20 @@
             </NumberFieldContent>
           </NumberField>
         </div>
+
+        <div class="setting-item flex justify-between items-center mb-2">
+          <div class="label text-[15px]">科技树还原游戏UI风格</div>
+          <div class="flex items-center gap-3">
+            <Checkbox
+              id="true_tree"
+              :modelValue="settings.true_tree_mode"
+              @update:model-value="
+                (val) => updateSettings('true_tree_mode', val)
+              "
+            />
+            <Label for="true_tree">启用</Label>
+          </div>
+        </div>
       </div>
 
       <!-- 快捷操作配置 -->
@@ -285,11 +299,11 @@ import {
   vehicle_type_texts,
   preset_wallpapers,
 } from "@/utils/dict";
-import { onMounted, onUnmounted, ref, computed } from "vue";
+import { ref, computed } from "vue";
 import { storeToRefs } from "pinia";
 import public_dialog from "@/components/public_dialog.vue";
 import cir_tabs from "@/components/cir_tabs.vue";
-import { useTreeDataStore } from "@/stores/tree_data";
+import { useTreeDataStore } from "@/stores/tree_data_store";
 import {
   Select,
   SelectContent,
@@ -319,9 +333,15 @@ import { parseNumber } from "@/utils/treeDataUtils";
 import { toggleResearchableSelectAll } from "@/utils/treeDataUtils";
 
 const treeDataStore = useTreeDataStore();
-const { updateSettings } = treeDataStore;
-const { settings, total_stats, selected_state_map, tree_data, researchable_set } =
-  storeToRefs(treeDataStore);
+const { updateSettings, updateSelectedStateMapAllLocal } = treeDataStore;
+const {
+  settings,
+  total_stats,
+  selected_state_map,
+  tree_data,
+  researchable_set,
+  types,
+} = storeToRefs(treeDataStore);
 const setting_visible = ref(false);
 const join_visible = ref(false);
 
@@ -329,12 +349,7 @@ const props = defineProps({
   vt: String, // 当前军种类型
   pt: String, // 点数信息显示类型（pointsType）
 });
-const emit = defineEmits([
-  "update:vt",
-  "update:pt",
-  "clearCache",
-  "exportToImage",
-]);
+const emit = defineEmits(["update:vt", "update:pt", "exportToImage", "clear"]);
 
 const is_all_selected = computed(() => {
   const selected = selected_state_map.value;
@@ -370,17 +385,39 @@ function toggleSelectAll() {
   toggleResearchableSelectAll({
     tree_data,
     selected_state_map,
-    settings
-  })
+    settings,
+  });
 }
 
+// 重置所有本地存储选中态数据
 function clearCache() {
-  emit("clearCache");
+  const ssmap = selected_state_map.value;
+  updateSelectedStateMapAllLocal({}, true);
+  alert("已清理旧缓存: " + JSON.stringify(ssmap));
+  emit("clear");
 }
 
-function exportToImage() {
-  alert("导出图像功能维护中，敬请期待！");
-  // emit("exportToImage");
+// 导出当前选中状态
+function exportToSelectedMap() {
+  const export_result = {
+    types: { ...types.value },
+    selected_state_map: { ...selected_state_map.value },
+  };
+
+  const jsonStr = JSON.stringify(export_result, null, 2);
+
+  const blob = new Blob([jsonStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${types.value.country_code}_${types.value.vehicle_type}_ssmap.json`;
+
+  document.body.appendChild(a);
+  a.click();
+
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 </script>
 
@@ -419,7 +456,7 @@ function exportToImage() {
 }
 
 .type-tabs {
-  width: 1300px;
+  width: 1350px;
   margin: 0 auto;
   /* background-image: linear-gradient(
     to top,
@@ -460,23 +497,6 @@ function exportToImage() {
     rgba(189, 233, 181, 0.35),
     transparent
   );
-}
-.type-tabs.scroll-trigger {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 888;
-  animation: show 0.3s;
-}
-.type-tabs.scroll-trigger .type-tabs-container {
-  height: 58px;
-  background-image: linear-gradient(
-    to bottom,
-    rgba(25, 33, 36, 0.45),
-    rgba(25, 33, 36, 0.25)
-  );
-  backdrop-filter: blur(30px);
-  box-shadow: 0 4px 15px 1px rgba(0, 0, 0, 0.2);
 }
 @keyframes show {
   0% {
