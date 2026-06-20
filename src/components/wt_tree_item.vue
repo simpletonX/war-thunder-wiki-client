@@ -1,9 +1,6 @@
 <template>
   <!-- .wt-tree-item_mask 为了解决stacking context问题 -->
-  <div
-    class="wt-tree-item_mask relative"
-    @contextmenu.prevent.stop="automaticPlanning(item)"
-  >
+  <div class="wt-tree-item_mask relative">
     <div
       class="wt-tree-item w-[156px] h-[56px] mb-[30px]"
       :class="{
@@ -20,12 +17,13 @@
       :style="{
         marginTop: `${86 * (helicopters?.move_bottom || 0)}px`,
       }"
-      :title="item.items ? 'Click to expand the folded vehicle' : ''"
+      @contextmenu.prevent.stop="openContextMenu(item)"
       :data_unit_id="item.data_unit_id"
     >
       <div
         class="inner-click-mask cursor-pointer absolute w-full h-full top-0 left-0"
         @click="clickTrigger(item)"
+        draggable="true"
       >
         <div class="icon absolute bottom-[3px] left-[2px]">
           <img :src="item.vehicle_icon" loading="lazy" v-fade-image />
@@ -45,16 +43,16 @@
           >
             {{ item.br }}
           </div>
-          <img
+          <div
             v-if="item.main_role"
-            :src="`/static/main_role/${item.main_role}.svg`"
-            class="h-[14px] absolute bottom-[6px] right-[4px]"
-          />
-          <img
+            class="main_role"
+            v-html="main_role_icons[item.main_role]"
+          ></div>
+          <div
             v-else-if="item.items"
-            :src="`/static/main_role/${item.items[0].main_role}.svg`"
-            class="h-[14px] absolute bottom-[6px] right-[4px]"
-          />
+            class="main_role"
+            v-html="main_role_icons[item.items[0].main_role]"
+          ></div>
         </template>
         <!-- currentPointsType: 1 显示Rp -->
         <div
@@ -90,15 +88,6 @@
 
         <!-- 选中态显示图标 -->
         <PhArrowFatLineUp class="selected-icon" :size="17" />
-
-        <!-- 点击打开详情 -->
-        <div
-          class="jump-details flex justify-center items-center text-[12px]"
-          @click.prevent.stop="jump_details(item)"
-        >
-          <span class="mt-[2px] mr-[1px]">跳转详情</span>
-          <PhArrowElbowDownRight :size="16" />
-        </div>
       </div>
 
       <!-- 直升机指向箭头 -->
@@ -131,12 +120,14 @@
                 <div
                   class="arrow_down bottom-rect absolute w-[8px] left-0"
                   :style="{
-                    height: helicopters?.cross_level && !helicopters?.placeholder_item
-                      ? `${37 * helicopters?.cross_level}px`
-                      : '5px',
-                    bottom: helicopters?.cross_level && !helicopters?.placeholder_item
-                      ? `${-37 * helicopters?.cross_level}px`
-                      : '-5px',
+                    height:
+                      helicopters?.cross_level && !helicopters?.placeholder_item
+                        ? `${37 * helicopters?.cross_level}px`
+                        : '5px',
+                    bottom:
+                      helicopters?.cross_level && !helicopters?.placeholder_item
+                        ? `${-37 * helicopters?.cross_level}px`
+                        : '-5px',
                   }"
                 >
                   <div
@@ -166,12 +157,14 @@
                 <div
                   class="arrow_down bottom-rect absolute w-[8px] right-0"
                   :style="{
-                    height: helicopters?.cross_level && !helicopters?.placeholder_item
-                      ? `${37 * helicopters?.cross_level}px`
-                      : '5px',
-                    bottom: helicopters?.cross_level && !helicopters?.placeholder_item
-                      ? `${-37 * helicopters?.cross_level}px`
-                      : '-5px',
+                    height:
+                      helicopters?.cross_level && !helicopters?.placeholder_item
+                        ? `${37 * helicopters?.cross_level}px`
+                        : '5px',
+                    bottom:
+                      helicopters?.cross_level && !helicopters?.placeholder_item
+                        ? `${-37 * helicopters?.cross_level}px`
+                        : '-5px',
                   }"
                 >
                   <div
@@ -210,6 +203,34 @@
       >
         <div class="arrow-tip w-0 h-0 absolute bottom-[-4px] left-[-3px]"></div>
       </div>
+
+      <!-- 快捷功能栏 -->
+      <div
+        class="fast-funcs flex items-center"
+        v-if="
+          contextmenu_state.target_data_unit_id === item.data_unit_id &&
+          contextmenu_state.visible
+        "
+      >
+        <div class="func-item" @click="automaticPlanning(item)">
+          <div class="flex justify-center">
+            <PhArrowElbowLeftUp :size="18" />
+          </div>
+          <p class="label">向上全选</p>
+        </div>
+        <div class="func-item" @click="joinQueue(item)">
+          <div class="flex justify-center">
+            <PhFunction :size="18" />
+          </div>
+          <p class="label">加入队列</p>
+        </div>
+        <div class="func-item" @click="jumpDetails(item)">
+          <div class="flex justify-center">
+            <PhArrowRight :size="18" />
+          </div>
+          <p class="label">跳转详情</p>
+        </div>
+      </div>
     </div>
 
     <!-- 展开折叠载具 -->
@@ -231,7 +252,7 @@
               [subItem.class_name || 'default']: true,
             }"
             @click="clickTrigger(subItem)"
-            @contextmenu.prevent.stop="automaticPlanning(subItem)"
+            @contextmenu.prevent.stop="openContextMenu(subItem)"
           >
             <div class="icon absolute bottom-[3px] left-[2px]">
               <img :src="subItem.vehicle_icon" alt="" />
@@ -247,11 +268,11 @@
               >
                 {{ subItem.br }}
               </div>
-              <img
+              <div
                 v-if="subItem.main_role"
-                :src="`/static/main_role/${subItem.main_role}.svg`"
-                class="h-[14px] absolute bottom-[6px] right-[4px]"
-              />
+                class="main_role"
+                v-html="main_role_icons[subItem.main_role]"
+              ></div>
             </template>
             <!-- currentPointsType: 1 显示Rp -->
             <div
@@ -293,13 +314,32 @@
             <!-- 选中态显示图标 -->
             <PhArrowFatLineUp class="selected-icon" :size="17" />
 
-            <!-- 点击打开详情 -->
+            <!-- 快捷功能栏 -->
             <div
-              class="jump-details flex justify-center items-center text-[12px]"
-              @click.prevent.stop="jump_details(subItem)"
+              class="fast-funcs flex items-center"
+              v-if="
+                contextmenu_state.target_data_unit_id ===
+                  subItem.data_unit_id && contextmenu_state.visible
+              "
             >
-              <span class="mt-[2px] mr-[1px]">跳转详情</span>
-              <PhArrowElbowDownRight :size="16" />
+              <div class="func-item" @click="automaticPlanning(subItem)">
+                <div class="flex justify-center">
+                  <PhArrowElbowLeftUp :size="18" />
+                </div>
+                <p class="label">向上全选</p>
+              </div>
+              <div class="func-item">
+                <div class="flex justify-center" @click="joinQueue(subItem)">
+                  <PhFunction :size="18" />
+                </div>
+                <p class="label">加入队列</p>
+              </div>
+              <div class="func-item" @click="jumpDetails(subItem)">
+                <div class="flex justify-center">
+                  <PhArrowRight :size="18" />
+                </div>
+                <p class="label">跳转详情</p>
+              </div>
             </div>
           </div>
         </div>
@@ -309,32 +349,38 @@
 </template>
 
 <script setup>
-import { computed, defineProps, onMounted, ref, watch } from "vue";
+import { computed, defineProps, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { usePublicMaskStore } from "@/stores/public_mask";
 import { toggleSelectColumnAbove } from "@/utils/treeDataUtils";
 import { useTreeDataStore } from "@/stores/tree_data_store";
-import { PhArrowFatLineUp, PhArrowElbowDownRight } from "@phosphor-icons/vue";
-import { terminal_vehicles } from "@/utils/dict";
+import {
+  PhArrowFatLineUp,
+  PhArrowRight,
+  PhArrowElbowLeftUp,
+  PhFunction,
+} from "@phosphor-icons/vue";
+import { terminal_vehicles } from "@/utils/terminal_vehicles";
+import { main_role_icons } from "@/utils/icon_svgs";
 
 const props = defineProps({
-  /**
-   * 当前载具对象
-   * @type {Object}
-   */
+  // 当前载具对象
   item: { type: Object, required: true },
+  // 是否为高级载具
   isPremium: { type: Boolean, default: false },
   // 是否为普通载具，只有普通载具才会显示研发点/银狮
   isDefault: { type: Boolean, default: false },
+  // 当前载具所属列下标
+  colIndex: { type: Number },
   // 当前points类型（0: 权重、1: 研发点、2: 银狮）
   currentPointsType: { type: Number, default: 0 },
   // 当前载具箭头计算数据元信息
   arrow_points: { type: Object, required: false },
 });
-const emit = defineEmits(["jumpItemDetailPage"]);
+const emit = defineEmits(["jumpItemDetailPage, joinQueue"]);
 
 const treeDataStore = useTreeDataStore();
-const { settings, selected_state_map, tree_data, types } =
+const { settings, selected_state_map, tree_data, types, contextmenu_state } =
   storeToRefs(treeDataStore);
 const is_terminal = computed(
   () =>
@@ -407,19 +453,12 @@ const helicopters =
     props.item.data_unit_id
   ];
 function calcHelicoptersArrowHeight() {
-  console.log(helicopters);
   const ITEM_HEIGHT = 56; // 单个 item 的高度（px）
   const ITEM_MARGIN = 30; // 每个 item 的下外边距（px）
   const RANK_MARGIN = 40; // 等级区域div之间的额外间距（px）
 
   if (!helicopters) return;
-  const {
-    cross_level,
-    placeholder_item,
-    has_next_item,
-    has_next_left_item,
-    has_right_item,
-  } = helicopters;
+  const { cross_level, placeholder_item, has_next_item } = helicopters;
   const itemHeightSum = placeholder_item * (ITEM_HEIGHT + ITEM_MARGIN); // item高度+下外边距之和
   const rankHeightSum = cross_level * RANK_MARGIN; // 跨行的总外边距之和
 
@@ -464,12 +503,87 @@ function automaticPlanning(item) {
 }
 
 // 跳转详情页
-function jump_details(item) {
+function jumpDetails(item) {
   emit("jumpItemDetailPage", item);
+}
+
+// 打开右键菜单
+function openContextMenu(target_item) {
+  if (target_item.type == "multiple") {
+    return;
+  }
+  contextmenu_state.value.target_data_unit_id = target_item.data_unit_id;
+  contextmenu_state.value.visible = true;
+}
+
+// 加入动态规划队列
+function joinQueue(item) {
+  emit("joinQueue", {
+    isPremium: props.isPremium,
+    colIndex: props.colIndex,
+    item,
+  });
 }
 </script>
 
+<style>
+.main_role svg {
+  height: 14px !important;
+}
+</style>
+
 <style scoped>
+.fast-funcs {
+  position: absolute;
+  right: 0;
+  bottom: -60px;
+  background-color: #1c2b2e;
+  z-index: 11;
+  border-radius: 4px;
+  box-shadow: 0 5px 15px 1px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgb(37, 55, 60);
+  padding: 4px;
+  animation: showOpa 0.2s;
+}
+@keyframes showOpa {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+.fast-funcs::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 20px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid #1c2b2e;
+}
+.func-item {
+  width: 58px;
+  padding: 2px 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.func-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+.func-item .label {
+  font-size: 11px;
+  margin-top: 2px;
+  color: #c9c9c9;
+  text-align: center;
+}
+.main_role {
+  position: absolute;
+  bottom: 6px;
+  right: 3px;
+}
 .folding-vehicle {
   position: absolute;
   background-color: rgb(30, 43, 46);
@@ -662,39 +776,7 @@ function jump_details(item) {
 .wt-tree-item.true_select_mode:not(.selected) .icon {
   opacity: 0.3;
 }
-.jump-details {
-  position: absolute;
-  bottom: -25px;
-  left: calc(50% - 40px);
-  height: 24px;
-  width: 80px;
-  background-image: linear-gradient(
-    to bottom,
-    var(--default-icon-bg),
-    transparent
-  );
-  display: none;
-  z-index: 10;
-  padding-bottom: 2px;
-}
-.wt-tree-item.prem .jump-details {
-  background-image: linear-gradient(
-    to bottom,
-    var(--prem-icon-bg),
-    transparent
-  );
-}
-.wt-tree-item.squad .jump-details {
-  background-image: linear-gradient(
-    to bottom,
-    var(--squad-icon-bg),
-    transparent
-  );
-}
 /* 其它样式 + ------------------------------------------------------- + */
-.wt-tree-item.single_item:hover .jump-details {
-  display: flex;
-}
 .wt-tree-item .icon img {
   height: 46px;
 }

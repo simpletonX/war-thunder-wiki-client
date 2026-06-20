@@ -11,10 +11,7 @@
         :class="{ active: modelValue == item }"
         @click="toggleCountry(item)"
       >
-        <div class="country-icon">
-          <img :src="`/static/country_ico/${item}.svg`" class="h-[18px]" />
-        </div>
-        <!-- <div class="text ml-[5px] text-[14px] font-[600]">{{ country_code_texts[item] }}</div> -->
+        <div class="country-icon" v-html="country_icons[item]"></div>
       </div>
     </div>
   </div>
@@ -22,6 +19,7 @@
 
 <script setup>
 import { country_code } from "@/utils/dict";
+import { country_icons } from "@/utils/icon_svgs";
 
 const props = defineProps({
   modelValue: String,
@@ -32,6 +30,12 @@ function toggleCountry(item) {
   emit("update:modelValue", item);
 }
 </script>
+
+<style>
+.country-icon svg {
+  height: 18px;
+}
+</style>
 
 <style scoped>
 .country-tabs-container {
@@ -48,11 +52,10 @@ function toggleCountry(item) {
   transition: 0.2s;
 }
 .country-tab-item:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: rgba(255, 255, 255, 0.07);
 }
 .country-tab-item.active {
-  width: 200px;
-  background-color: #444d5d;
+  background-color: #525e71;
 }
 @media (max-height: 779px) {
   .country-tabs {

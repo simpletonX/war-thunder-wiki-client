@@ -11,9 +11,10 @@
           :class="{ active: vt == item }"
           @click="toggleVehicleType(item)"
         >
-          <div class="type-icon">
-            <img :src="`/static/${item}.svg`" class="h-[18px]" />
-          </div>
+          <div
+            class="type-icon"
+            v-html="main_role_icons[vehicle_type_icons[item]]"
+          ></div>
           <div class="text ml-[4px] text-[14px]">
             {{ vehicle_type_texts[item] }}
           </div>
@@ -91,14 +92,10 @@
             <!-- 总计 -->
             <div class="flex items-center">
               <span class="text-[14px] opacity-75 mr-2">当前总计: </span>
-              <span class="text-[14px] mr-[2px]">{{
-                parseNumber(total_stats.rp, true)
-              }}</span>
+              <span class="text-[14px] mr-[2px]">{{ current_totals.rp }}</span>
               <img :src="`/static/rp.png`" width="18" />
               <span class="text-[14px] ml-1 mr-2">/</span>
-              <span class="text-[14px] mr-[2px]">{{
-                parseNumber(total_stats.sp, true)
-              }}</span>
+              <span class="text-[14px] mr-[2px]">{{ current_totals.sp }}</span>
               <img :src="`/static/war-points.png`" width="18" />
             </div>
             <div class="show-mode ml-6 mr-[6px]">
@@ -196,6 +193,29 @@
             />
             <Label for="true_tree">启用</Label>
           </div>
+        </div>
+
+        <div class="setting-item flex justify-between items-center mb-2">
+          <div class="label text-[15px]">数学格式</div>
+          <Select
+            :modelValue="settings.math_format"
+            @update:model-value="(val) => updateSettings('math_format', val)"
+          >
+            <SelectTrigger class="max-w-[310px]">
+              <SelectValue placeholder="请选择数学格式" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>math format</SelectLabel>
+                <SelectItem value="thousands_separator"
+                  >千位分隔制（1,008,611）</SelectItem
+                >
+                <SelectItem value="Chinese_number_unit_system"
+                  >中文万亿单位制（100.86万）</SelectItem
+                >
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -329,9 +349,26 @@ import {
   NumberFieldInput,
 } from "@/components/ui/number-field";
 import { PhWarningCircle } from "@phosphor-icons/vue";
-import { parseNumber } from "@/utils/treeDataUtils";
-import { toggleResearchableSelectAll } from "@/utils/treeDataUtils";
+import {
+  parseNumber,
+  formatChineseNumber,
+  toggleResearchableSelectAll,
+} from "@/utils/treeDataUtils";
+import { main_role_icons } from "@/utils/icon_svgs";
 
+const props = defineProps({
+  vt: String, // 当前军种类型
+  pt: String, // 点数信息显示类型（pointsType）
+});
+const emit = defineEmits(["update:vt", "update:pt", "exportToImage", "clear"]);
+
+const vehicle_type_icons = {
+  ground: "Medium tank",
+  aviation: "Fighter",
+  helicopters: "Attack helicopter",
+  ships: "Battlecruiser",
+  boats: "Heavy boat",
+};
 const treeDataStore = useTreeDataStore();
 const { updateSettings, updateSelectedStateMapAllLocal } = treeDataStore;
 const {
@@ -340,16 +377,22 @@ const {
   selected_state_map,
   tree_data,
   researchable_set,
-  types,
 } = storeToRefs(treeDataStore);
 const setting_visible = ref(false);
 const join_visible = ref(false);
-
-const props = defineProps({
-  vt: String, // 当前军种类型
-  pt: String, // 点数信息显示类型（pointsType）
+const current_totals = computed(() => {
+  if (settings.value.math_format == "thousands_separator") {
+    return {
+      rp: parseNumber(total_stats.value.rp, true),
+      sp: parseNumber(total_stats.value.sp, true),
+    };
+  } else {
+    return {
+      rp: formatChineseNumber(total_stats.value.rp, true),
+      sp: formatChineseNumber(total_stats.value.sp, true),
+    };
+  }
 });
-const emit = defineEmits(["update:vt", "update:pt", "exportToImage", "clear"]);
 
 const is_all_selected = computed(() => {
   const selected = selected_state_map.value;
@@ -399,25 +442,26 @@ function clearCache() {
 
 // 导出当前选中状态
 function exportToSelectedMap() {
-  const export_result = {
-    types: { ...types.value },
-    selected_state_map: { ...selected_state_map.value },
-  };
+  alert("敬请期待！");
+  // const export_result = {
+  //   types: { ...types.value },
+  //   selected_state_map: { ...selected_state_map.value },
+  // };
 
-  const jsonStr = JSON.stringify(export_result, null, 2);
+  // const jsonStr = JSON.stringify(export_result, null, 2);
 
-  const blob = new Blob([jsonStr], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+  // const blob = new Blob([jsonStr], { type: "application/json" });
+  // const url = URL.createObjectURL(blob);
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${types.value.country_code}_${types.value.vehicle_type}_ssmap.json`;
+  // const a = document.createElement("a");
+  // a.href = url;
+  // a.download = `${types.value.country_code}_${types.value.vehicle_type}_ssmap.json`;
 
-  document.body.appendChild(a);
-  a.click();
+  // document.body.appendChild(a);
+  // a.click();
 
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // document.body.removeChild(a);
+  // URL.revokeObjectURL(url);
 }
 </script>
 

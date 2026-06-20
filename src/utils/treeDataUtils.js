@@ -1,6 +1,8 @@
 import { useTreeDataStore } from "@/stores/tree_data_store";
 import { storeToRefs } from "pinia";
 import { unlock_quantitys } from "@/utils/dict";
+import { terminal_vehicles } from "@/utils/terminal_vehicles";
+import { planShortestResearchPath } from "@/utils/researchPathPlanner";
 
 // 右键选中当前列至当前item
 export function toggleSelectColumnAbove({
@@ -248,14 +250,15 @@ export function createResearchableSet(tree_data) {
   return set;
 }
 
-export function parseNumber(value, toFormat = false) {
-  if (value == null) return toFormat ? "0" : 0;
+// 数字千位分隔格式化/反格式化
+export function parseNumber(value, format = false) {
+  if (value == null) return format ? "0" : 0;
 
   // 转字符串统一处理
   let str = typeof value === "string" ? value : String(value);
 
   // 去除千分位字符串，解析成数字（默认）
-  if (!toFormat) {
+  if (!format) {
     const normalized = str.replace(/,/g, "");
 
     // 非纯数字直接返回 0（避免脏数据）
@@ -270,6 +273,33 @@ export function parseNumber(value, toFormat = false) {
   if (!Number.isFinite(num)) return "0";
 
   return num.toLocaleString("en-US");
+}
+
+// 数字中文万亿单位格式化/反格式化
+export function formatChineseNumber(value, format = false) {
+  if (value == null || value === "") return value;
+
+  // 数值 -> 万单位
+  if (format) {
+    const num = Number(value);
+
+    if (Number.isNaN(num)) return value;
+    if (Math.abs(num) < 10000) {
+      return String(num);
+    }
+    return `${parseFloat((num / 10000).toFixed(2))}万`;
+  }
+
+  // 万单位 -> 数值
+  const str = String(value).trim();
+
+  if (!str.endsWith("万")) {
+    const num = Number(str);
+    return Number.isNaN(num) ? value : num;
+  }
+
+  const num = parseFloat(str.slice(0, -1));
+  return Number.isNaN(num) ? value : Math.round(num * 10000);
 }
 
 // 创建tree_data对应箭头计算信息的HashMap
@@ -446,240 +476,296 @@ export function calculateRankStats(selected_state_map, vehicle_cost_map) {
   return stats;
 }
 
+// 提取tree_data中银币载具区域每条线的顶端/末端载具
+export function getColumnBoundaryVehicles(tree_data) {
+  if (!tree_data?.length) return [];
+
+  const rowCount = tree_data.length;
+
+  // 找最大列数（跨所有 rank）
+  let maxColumnCount = 0;
+  for (const rank of tree_data) {
+    maxColumnCount = Math.max(
+      maxColumnCount,
+      rank.researchable_vehicles?.length || 0,
+    );
+  }
+
+  const result = [];
+
+  for (let columnIndex = 0; columnIndex < maxColumnCount; columnIndex++) {
+    const group = [];
+
+    // ========== 1. 找最小等级（从上往下第一个） ==========
+    let firstFound = null;
+
+    for (let r = 0; r < rowCount; r++) {
+      const column = tree_data[r]?.researchable_vehicles?.[columnIndex];
+      if (!column?.length) continue;
+
+      const item = column[0];
+
+      firstFound =
+        item.type === "single"
+          ? item
+          : item.type === "multiple"
+            ? item.items?.[0]
+            : null;
+
+      if (firstFound) break;
+    }
+
+    if (firstFound) group.push(firstFound);
+
+    // ========== 2. 找最大等级（从下往上最后一个） ==========
+    let lastFound = null;
+
+    for (let r = rowCount - 1; r >= 0; r--) {
+      const column = tree_data[r]?.researchable_vehicles?.[columnIndex];
+      if (!column?.length) continue;
+
+      const item = column[column.length - 1];
+
+      lastFound =
+        item.type === "single"
+          ? item
+          : item.type === "multiple"
+            ? item.items?.[item.items.length - 1]
+            : null;
+
+      if (lastFound) break;
+    }
+
+    if (lastFound) group.push(lastFound);
+
+    if (group.length) {
+      result.push(group);
+    }
+  }
+
+  return result;
+}
+
+/** researchPathPlanner/Path Worker相关 */
+let researchPathWorker = null;
+let researchPathWorkerRequestId = 0;
+const researchPathWorkerCallbacks = new Map();
+
+function normalizeVehicleId(value) {
+  return typeof value === "string" ? value : value?.data_unit_id;
+}
+function collectSelectedByRank(treeData, selectedMap) {
+  const byRank = {};
+
+  const push = (rankBlock, item, isPremium = false) => {
+    if (!item?.data_unit_id || !selectedMap[item.data_unit_id]) return;
+
+    if (!byRank[rankBlock.rank]) byRank[rankBlock.rank] = [];
+    byRank[rankBlock.rank].push({
+      data_unit_id: item.data_unit_id,
+      title: item.title,
+      rp: parseNumber(item.rp),
+      sp: parseNumber(item.sp),
+      isPremium,
+    });
+  };
+
+  for (const rankBlock of treeData || []) {
+    for (const column of rankBlock.researchable_vehicles || []) {
+      for (const item of column || []) {
+        if (item?.type === "multiple" && Array.isArray(item.items)) {
+          for (const child of item.items) push(rankBlock, child);
+          continue;
+        }
+
+        push(rankBlock, item);
+      }
+    }
+
+    for (const column of rankBlock.premium_vehicles || []) {
+      for (const item of column || []) {
+        if (item?.type === "multiple" && Array.isArray(item.items)) {
+          for (const child of item.items) push(rankBlock, child, true);
+          continue;
+        }
+
+        push(rankBlock, item, true);
+      }
+    }
+  }
+
+  return byRank;
+}
+function createResearchPathWorker() {
+  if (researchPathWorker) return researchPathWorker;
+  if (typeof Worker === "undefined") return null;
+
+  researchPathWorker = new Worker(
+    new URL("./researchPathWorker.js", import.meta.url),
+    { type: "module" },
+  );
+
+  researchPathWorker.onmessage = (event) => {
+    const { requestId, ok, result, error } = event.data || {};
+    const callback = researchPathWorkerCallbacks.get(requestId);
+    if (!callback) return;
+
+    researchPathWorkerCallbacks.delete(requestId);
+
+    if (ok) {
+      callback.resolve(result);
+    } else {
+      callback.reject(new Error(error || "Research path worker failed."));
+    }
+  };
+
+  researchPathWorker.onerror = (event) => {
+    const error = new Error(event.message || "Research path worker error.");
+
+    for (const callback of researchPathWorkerCallbacks.values()) {
+      callback.reject(error);
+    }
+
+    researchPathWorkerCallbacks.clear();
+    researchPathWorker.terminate();
+    researchPathWorker = null;
+  };
+
+  return researchPathWorker;
+}
+function normalizePlanResult({
+  plan,
+  treeData,
+  targetIds,
+  selectedStateMapRef,
+}) {
+  const nextSelectedMap = {};
+
+  for (const id of plan.selectedIds || []) {
+    nextSelectedMap[id] = true;
+  }
+
+  for (const id of plan.premiumIds || []) {
+    nextSelectedMap[id] = true;
+  }
+
+  selectedStateMapRef.value = nextSelectedMap;
+
+  return {
+    ok: plan.ok,
+    selected_state_map: nextSelectedMap,
+    research_ids: plan.selectedIds || [],
+    premium_ids: plan.premiumIds || [],
+    target_ids: targetIds,
+    total_rp: plan.totalRp || 0,
+    total_sp: plan.totalSp || 0,
+    rank_counts: plan.rankCounts || [],
+    by_rank: collectSelectedByRank(treeData, nextSelectedMap),
+    warnings: plan.warnings || [],
+    mode: plan.mode,
+    priority_score: plan.priorityScore || 0,
+  };
+}
 export function findShortestPathToVehicle({
   targets = [],
   planned_prems = [],
   priority_column = [],
+  priority_mode = "soft",
 } = {}) {
   const treeDataStore = useTreeDataStore();
   const { tree_data, selected_state_map, types } = storeToRefs(treeDataStore);
 
-  const countryCode = types.value.country_code;
-  const vehicleType = types.value.vehicle_type;
+  const treeData = Array.isArray(tree_data.value) ? tree_data.value : [];
+  const targetIds =
+    targets.length > 0
+      ? targets.map(normalizeVehicleId).filter(Boolean)
+      : Object.keys(selected_state_map.value || {}).filter(
+          (id) => selected_state_map.value[id],
+        );
+  const plannedPremiumIds = planned_prems
+    .map(normalizeVehicleId)
+    .filter(Boolean);
 
-  const targetIds = new Set(targets.map((v) => v.data_unit_id));
-  const plannedPremIds = new Set(planned_prems.map((v) => v.data_unit_id));
-
-  const resultSelected = {};
-  const requiredResearchIds = new Set();
-  const plannedPremiumIds = new Set();
-
-  const rankIndexMap = new Map();
-
-  tree_data.value.forEach((rankBlock, rankIndex) => {
-    rankIndexMap.set(rankBlock.rank, rankIndex);
+  const plan = planShortestResearchPath({
+    treeData,
+    targetIds,
+    plannedPremiumIds,
+    unlockQuantityMap:
+      unlock_quantitys?.[types.value.country_code]?.[
+        types.value.vehicle_type
+      ] ?? {},
+    terminalVehicles: terminal_vehicles,
+    countryCode: types.value.country_code,
+    vehicleType: types.value.vehicle_type,
+    priorityColumns: priority_column,
+    priorityMode: priority_mode,
   });
 
-  function flattenResearch(rankBlock, rankIndex) {
-    const result = [];
-
-    rankBlock.researchable_vehicles.forEach((column, columnIndex) => {
-      column.forEach((node, rowIndex) => {
-        if (node.type === "multiple" && Array.isArray(node.children)) {
-          node.children.forEach((child, childIndex) => {
-            result.push({
-              ...child,
-              rank: rankBlock.rank,
-              rankIndex,
-              columnIndex,
-              rowIndex,
-              childIndex,
-              parent: node,
-              isChild: true,
-              isResearchable: true,
-            });
-          });
-        } else {
-          result.push({
-            ...node,
-            rank: rankBlock.rank,
-            rankIndex,
-            columnIndex,
-            rowIndex,
-            isChild: false,
-            isResearchable: true,
-          });
-        }
-      });
-    });
-
-    return result;
-  }
-
-  function flattenPremium(rankBlock, rankIndex) {
-    const result = [];
-
-    rankBlock.premium_vehicles?.forEach((column, columnIndex) => {
-      column.forEach((node, rowIndex) => {
-        result.push({
-          ...node,
-          rank: rankBlock.rank,
-          rankIndex,
-          columnIndex,
-          rowIndex,
-          isPremium: true,
-        });
-      });
-    });
-
-    return result;
-  }
-
-  const allResearch = [];
-  const allPremium = [];
-
-  tree_data.value.forEach((rankBlock, rankIndex) => {
-    allResearch.push(...flattenResearch(rankBlock, rankIndex));
-    allPremium.push(...flattenPremium(rankBlock, rankIndex));
+  return normalizePlanResult({
+    plan,
+    treeData,
+    targetIds,
+    selectedStateMapRef: selected_state_map,
   });
-
-  const researchMap = new Map(allResearch.map((v) => [v.data_unit_id, v]));
-  const premiumMap = new Map(allPremium.map((v) => [v.data_unit_id, v]));
-
-  /**
-   * 目标节点路径：
-   * 同一列中，目标节点之前的所有 researchable 节点都必须选中。
-   */
-  function collectColumnPath(targetNode) {
-    const rankBlock = tree_data.value[targetNode.rankIndex];
-    const column =
-      rankBlock.researchable_vehicles[targetNode.columnIndex] || [];
-
-    for (const rawNode of column) {
-      if (rawNode.type === "multiple" && Array.isArray(rawNode.children)) {
-        for (const child of rawNode.children) {
-          requiredResearchIds.add(child.data_unit_id);
-
-          if (child.data_unit_id === targetNode.data_unit_id) {
-            return;
-          }
-        }
-      } else {
-        requiredResearchIds.add(rawNode.data_unit_id);
-
-        if (rawNode.data_unit_id === targetNode.data_unit_id) {
-          return;
-        }
-      }
-    }
-  }
-
-  for (const target of targets) {
-    const node = researchMap.get(target.data_unit_id);
-
-    if (!node) {
-      console.warn("目标节点不存在或不是 researchable_vehicles:", target);
-      continue;
-    }
-
-    collectColumnPath(node);
-  }
-
-  for (const prem of planned_prems) {
-    if (premiumMap.has(prem.data_unit_id)) {
-      plannedPremiumIds.add(prem.data_unit_id);
-    }
-  }
-
-  function getUnlockQuantity(rank) {
-    return unlock_quantitys?.[countryCode]?.[vehicleType]?.[rank] ?? 0;
-  }
-
-  function getPriorityScore(node) {
-    const index = priority_column.indexOf(node.columnIndex);
-
-    if (index === -1) {
-      return 9999;
-    }
-
-    return index;
-  }
-
-  /**
-   * 凑数排序：
-   * 1. 已经必选的节点不重复计费
-   * 2. 如果指定 priority_column，优先按列
-   * 3. multiple 子节点优先
-   * 4. RP 越低越优先
-   */
-  function sortCandidates(a, b) {
-    const pa = getPriorityScore(a);
-    const pb = getPriorityScore(b);
-
-    if (pa !== pb) return pa - pb;
-
-    if (a.isChild !== b.isChild) {
-      return a.isChild ? -1 : 1;
-    }
-
-    return (a.rp || 0) - (b.rp || 0);
-  }
-
-  /**
-   * 对某个 Rank 凑够 unlock_quantity
-   */
-  function fillRankUnlock(rankBlock, rankIndex) {
-    const unlockQuantity = getUnlockQuantity(rankBlock.rank);
-
-    if (!unlockQuantity) return;
-
-    const currentResearch = flattenResearch(rankBlock, rankIndex);
-    const currentPremium = flattenPremium(rankBlock, rankIndex);
-
-    let selectedCount = 0;
-
-    for (const node of currentResearch) {
-      if (requiredResearchIds.has(node.data_unit_id)) {
-        selectedCount++;
-      }
-    }
-
-    for (const node of currentPremium) {
-      if (plannedPremiumIds.has(node.data_unit_id)) {
-        selectedCount++;
-      }
-    }
-
-    const need = unlockQuantity - selectedCount;
-
-    if (need <= 0) return;
-
-    const candidates = currentResearch
-      .filter((node) => !requiredResearchIds.has(node.data_unit_id))
-      .sort(sortCandidates);
-
-    for (const node of candidates.slice(0, need)) {
-      requiredResearchIds.add(node.data_unit_id);
-    }
-  }
-
-  /**
-   * 只需要处理目标最高 Rank 之前的 Rank。
-   */
-  const maxTargetRankIndex = Math.max(
-    ...targets
-      .map((v) => researchMap.get(v.data_unit_id)?.rankIndex)
-      .filter((v) => typeof v === "number"),
-  );
-
-  for (let rankIndex = 0; rankIndex <= maxTargetRankIndex; rankIndex++) {
-    const rankBlock = tree_data.value[rankIndex];
-    fillRankUnlock(rankBlock, rankIndex);
-  }
-
-  for (const id of requiredResearchIds) {
-    resultSelected[id] = true;
-  }
-
-  for (const id of plannedPremiumIds) {
-    resultSelected[id] = true;
-  }
-
-  selected_state_map.value = resultSelected;
-
-  return {
-    selected_state_map: resultSelected,
-    research_ids: [...requiredResearchIds],
-    premium_ids: [...plannedPremiumIds],
-  };
 }
+export async function findShortestPathToVehicleWorker({
+  targets = [],
+  planned_prems = [],
+  priority_column = [],
+  priority_mode = "soft",
+} = {}) {
+  const treeDataStore = useTreeDataStore();
+  const { tree_data, selected_state_map, types } = storeToRefs(treeDataStore);
+
+  const treeData = Array.isArray(tree_data.value) ? tree_data.value : [];
+  const targetIds =
+    targets.length > 0
+      ? targets.map(normalizeVehicleId).filter(Boolean)
+      : Object.keys(selected_state_map.value || {}).filter(
+          (id) => selected_state_map.value[id],
+        );
+  const plannedPremiumIds = planned_prems
+    .map(normalizeVehicleId)
+    .filter(Boolean);
+
+  const worker = createResearchPathWorker();
+
+  if (!worker) {
+    return findShortestPathToVehicle({
+      targets,
+      planned_prems,
+      priority_column,
+      priority_mode,
+    });
+  }
+
+  const requestId = ++researchPathWorkerRequestId;
+  const plan = await new Promise((resolve, reject) => {
+    researchPathWorkerCallbacks.set(requestId, { resolve, reject });
+    worker.postMessage({
+      requestId,
+      payload: {
+        treeData,
+        targetIds,
+        plannedPremiumIds,
+        unlockQuantityMap:
+          unlock_quantitys?.[types.value.country_code]?.[
+            types.value.vehicle_type
+          ] ?? {},
+        terminalVehicles: terminal_vehicles,
+        countryCode: types.value.country_code,
+        vehicleType: types.value.vehicle_type,
+        priorityColumns: priority_column,
+        priorityMode: priority_mode,
+      },
+    });
+  });
+
+  return normalizePlanResult({
+    plan,
+    treeData,
+    targetIds,
+    selectedStateMapRef: selected_state_map,
+  });
+}
+/** researchPathPlanner/Path Worker相关 */

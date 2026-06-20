@@ -31,6 +31,8 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     all_select_mode: false,
     // 启用真实科技树模拟
     true_tree_mode: false,
+    // 数学格式
+    math_format: "thousands_separator",
   };
   const settings_raw = getStorage("settings", {});
   const settings = ref({
@@ -172,6 +174,13 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     },
   };
 
+  // 全局item右键菜单显示状态
+  const contextmenu_state = ref({
+    visible: false,
+    target_data_unit_id: ""
+  });
+
+
   return {
     tree_data,
     updateTreeData,
@@ -190,5 +199,6 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     updateResearchableSet,
     loading_visible,
     loading,
+    contextmenu_state,
   };
 });

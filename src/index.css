@@ -1,3 +1,6 @@
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -6,11 +9,6 @@
 @font-face {
   font-family: "WTSymbols";
   src: url("/static/symbols_skyquake.bfc9728c6a6bc73f209a.ttf");
-}
-
-@font-face {
-  font-family: "amarurgt";
-  src: url("/static/amarurgt.ttf");
 }
 
 * {

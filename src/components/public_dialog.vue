@@ -45,6 +45,11 @@ function close_mask() {
 }
 .public_dialog_main {
   padding: 20px 22px 12px;
+  max-height: 80vh;
+  overflow: auto;
+}
+.public_dialog_main::-webkit-scrollbar {
+  width: 0;
 }
 .mask- {
   opacity: 1;
