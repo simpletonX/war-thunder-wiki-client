@@ -29,7 +29,11 @@ const props = defineProps({
   hideWhenDetached: { type: Boolean, required: false },
   positionStrategy: { type: String, required: false },
   updatePositionStrategy: { type: String, required: false },
-  class: { type: null, required: false },
+  class: {
+    type: [Boolean, null, String, Object, Array],
+    required: false,
+    skipCheck: true,
+  },
 });
 
 const emits = defineEmits(["escapeKeyDown", "pointerDownOutside"]);

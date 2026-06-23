@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test:planner": "node --test tests/researchPathPlanner.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -19,7 +20,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "pinia": "^3.0.3",
-    "reka-ui": "^2.9.10",
+    "reka-ui": "^2.10.0",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.1.16",
     "vue": "^3.5.22",

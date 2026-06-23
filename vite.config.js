@@ -43,7 +43,8 @@ export default defineConfig({
     open: true,
     // host: true,
     watch: {
-      ignored: ["**/node_modules/**", "**/dist/**", "**/doc/**"],
+      ignored: ["**/node_modules/**", "**/dist/**"],
     },
+    historyApiFallback: true
   },
 });

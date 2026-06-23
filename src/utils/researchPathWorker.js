@@ -11,6 +11,8 @@ function serializePlan(plan) {
     warnings: plan.warnings || [],
     mode: plan.mode,
     priorityScore: plan.priorityScore || 0,
+    searchComplete: plan.searchComplete !== false,
+    ownedIds: plan.ownedIds || [],
   };
 }
 

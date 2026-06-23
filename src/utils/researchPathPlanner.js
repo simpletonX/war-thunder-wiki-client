@@ -180,7 +180,6 @@ function buildGraph({
     entries.sort((a, b) => {
       if (!hasPriorityColumns) {
         if (a.rp !== b.rp) return a.rp - b.rp;
-        if (a.sp !== b.sp) return a.sp - b.sp;
         if (a.columnIndex !== b.columnIndex) {
           return a.columnIndex - b.columnIndex;
         }
@@ -202,11 +201,18 @@ function buildGraph({
   return { research, premium, deps, byRank };
 }
 
-function createClosureGetter(deps, warnings) {
+function createClosureGetter(deps, warnings, ownedIds = new Set()) {
   const cache = new Map();
 
   const visit = (id, stack = new Set()) => {
     if (cache.has(id)) return cache.get(id);
+
+    // 已拥有载具是规划依赖链的起点，不再继续回溯它之前的载具。
+    if (ownedIds.has(id)) {
+      const result = [id];
+      cache.set(id, result);
+      return result;
+    }
 
     if (stack.has(id)) {
       warnings.push(`Dependency cycle detected at ${id}`);
@@ -246,20 +252,21 @@ export function planShortestResearchPath({
   treeData = [],
   targetIds = [],
   plannedPremiumIds = [],
+  ownedResearchIds = [],
   unlockQuantityMap,
   terminalVehicles,
   countryCode,
   vehicleType,
   priorityColumns = [],
   priorityMode = "soft",
+  ignoreMultiple = false,
   maxIterations = 120000,
 }) {
   const warnings = [];
   const normalizedTargets = targetIds.map(toId).filter(Boolean);
   const normalizedPremiums = plannedPremiumIds.map(toId).filter(Boolean);
+  const normalizedOwnedIds = ownedResearchIds.map(toId).filter(Boolean);
   const normalizedPriorityMode = priorityMode === "hard" ? "hard" : "soft";
-  const allowRankOverflow =
-    priorityColumns.length > 0 && normalizedPriorityMode === "hard";
   const searchMode =
     priorityColumns.length > 0
       ? `priority-${normalizedPriorityMode}`
@@ -272,11 +279,41 @@ export function planShortestResearchPath({
     vehicleType,
     priorityColumns,
   });
-  const getClosure = createClosureGetter(graph.deps, warnings);
+  const ownedIds = new Set();
+  for (const id of normalizedOwnedIds) {
+    if (graph.research.has(id)) {
+      ownedIds.add(id);
+    } else {
+      warnings.push(`Owned researchable vehicle was not found: ${id}`);
+    }
+  }
+  const getClosure = createClosureGetter(graph.deps, warnings, ownedIds);
+  const validTargetIds = normalizedTargets.filter((id) => {
+    if (graph.research.has(id)) return true;
+    warnings.push(`Target is not a researchable vehicle: ${id}`);
+    return false;
+  });
+
+  if (!validTargetIds.length) {
+    return {
+      ok: false,
+      selectedIds: [],
+      premiumIds: [],
+      totalRp: 0,
+      totalSp: 0,
+      rankCounts: new Array(treeData.length).fill(0),
+      warnings: [...warnings, "No valid research target was provided."],
+      graph,
+      mode: searchMode,
+      priorityScore: 0,
+      searchComplete: true,
+      ownedIds: [...ownedIds],
+    };
+  }
 
   const targetRankIndex = Math.max(
     -1,
-    ...normalizedTargets
+    ...validTargetIds
       .map((id) => graph.research.get(id)?.rankIndex)
       .filter((value) => typeof value === "number"),
   );
@@ -305,16 +342,13 @@ export function planShortestResearchPath({
 
   const initialSelected = new Set();
 
+  for (const id of ownedIds) initialSelected.add(id);
+
   for (const id of getInitialFreeResearchIds(graph)) {
     for (const depId of getClosure(id)) initialSelected.add(depId);
   }
 
-  for (const id of normalizedTargets) {
-    if (!graph.research.has(id)) {
-      warnings.push(`Target is not a researchable vehicle: ${id}`);
-      continue;
-    }
-
+  for (const id of validTargetIds) {
     for (const depId of getClosure(id)) initialSelected.add(depId);
   }
 
@@ -336,6 +370,7 @@ export function planShortestResearchPath({
     for (const id of selectedIds) {
       const entry = graph.research.get(id);
       if (!entry) continue;
+      if (ownedIds.has(id)) continue;
       rp += entry.rp;
       sp += entry.sp;
     }
@@ -343,48 +378,17 @@ export function planShortestResearchPath({
     return { rp, sp };
   };
 
-  const costOfIds = (ids) => {
+  const rpOfIds = (ids) => {
     let rp = 0;
-    let sp = 0;
 
     for (const id of ids) {
       const entry = graph.research.get(id);
       if (!entry) continue;
+      if (ownedIds.has(id)) continue;
       rp += entry.rp;
-      sp += entry.sp;
     }
 
-    return { rp, sp };
-  };
-
-  const overflows = (counts) =>
-    requirements.some(
-      (required, rankIndex) => required > 0 && counts[rankIndex] > required,
-    );
-
-  const goalReached = (counts) =>
-    requirements.every(
-      (required, rankIndex) => required === 0 || counts[rankIndex] === required,
-    );
-
-  const lowerBoundRp = (counts, selectedIds) => {
-    let bound = 0;
-
-    for (let rankIndex = 0; rankIndex < requirements.length; rankIndex++) {
-      const need = requirements[rankIndex] - counts[rankIndex];
-      if (need <= 0) continue;
-
-      const costs = (graph.byRank.get(rankIndex) || [])
-        .filter((entry) => !selectedIds.has(entry.id))
-        .map((entry) => entry.rp)
-        .sort((a, b) => a - b);
-
-      if (costs.length < need) return Infinity;
-
-      for (let i = 0; i < need; i++) bound += costs[i];
-    }
-
-    return bound;
+    return rp;
   };
 
   const firstOpenRank = (counts) =>
@@ -393,104 +397,256 @@ export function planShortestResearchPath({
     );
 
   const initialCounts = countRanks(initialSelected);
+  const researchIdsOf = (ids) => [...ids].filter((id) => !ownedIds.has(id));
+  const priorityColumnSet = new Set(priorityColumns);
+  const priorityScoreOf = (selectedIds) => {
+    let count = 0;
 
-  if (!allowRankOverflow && overflows(initialCounts)) {
-    return {
-      ok: false,
-      selectedIds: [...initialSelected],
-      premiumIds: [...premiumIds],
-      totalRp: costOf(initialSelected).rp,
-      totalSp: costOf(initialSelected).sp,
-      rankCounts: initialCounts,
-      warnings: [
-        ...warnings,
-        "Target dependencies exceed one or more exact rank requirements.",
-      ],
-      graph,
-      mode: searchMode,
-    };
-  }
+    for (const id of selectedIds) {
+      const entry = graph.research.get(id);
+      if (
+        entry &&
+        !ownedIds.has(id) &&
+        entry.rankIndex < targetRankIndex &&
+        priorityColumnSet.has(entry.columnIndex)
+      ) {
+        count++;
+      }
+    }
+
+    return count;
+  };
+  const isIgnoredMultipleFiller = (entry) =>
+    ignoreMultiple && entry?.childIndex != null && entry.childIndex > 0;
 
   let iterations = 0;
 
   const makeKey = (selectedIds, rankIndex) =>
     `${rankIndex}|${[...selectedIds].sort().join(",")}`;
 
-  if (priorityColumns.length > 0) {
-    let priorityResult = null;
-    const visited = new Set();
-    const priorityColumnSet = new Set(priorityColumns);
+  /**
+   * 精确求解最少 RP 路线。
+   *
+   * 研发依赖图由 buildGraph 构造成列内森林：每个节点最多有一个前置
+   * 节点，不同根节点之间没有依赖。对每棵依赖树枚举“选择/不选择”并按
+   * 各 Rank 已满足数量压缩状态，再合并所有根节点。相同计数状态只保留
+   * (RP, -priorityScore) 字典序最优解，因此不会丢弃潜在的全局最优解。
+   */
+  const solveExactMinimumRoute = () => {
+    const entries = [...graph.research.values()];
+    const entryIndex = new Map(
+      entries.map((entry, index) => [entry.id, index]),
+    );
+    const children = new Map(entries.map((entry) => [entry.id, []]));
+    const roots = [];
 
-    const priorityScoreOf = (selectedIds) => {
-      let count = 0;
+    for (const entry of entries) {
+      const dependencyIds = graph.deps.get(entry.id) || [];
+      if (dependencyIds.length > 1) {
+        throw new Error(
+          `Exact route search requires at most one dependency per vehicle: ${entry.id}`,
+        );
+      }
 
-      for (const id of selectedIds) {
-        const entry = graph.research.get(id);
-        if (
-          entry &&
-          entry.rankIndex < targetRankIndex &&
-          priorityColumnSet.has(entry.columnIndex)
-        ) {
-          count++;
+      // 已拥有载具是新的可用起点，其更早的依赖不属于本次规划。
+      const parentId = ownedIds.has(entry.id) ? null : dependencyIds[0];
+      if (parentId && children.has(parentId)) {
+        children.get(parentId).push(entry.id);
+      } else {
+        roots.push(entry.id);
+      }
+    }
+
+    const zeroCounts = () => new Array(requirements.length).fill(0);
+    const capCounts = (counts) =>
+      counts.map((count, rankIndex) =>
+        Math.min(count, requirements[rankIndex]),
+      );
+    const countsKey = (counts) => counts.join(",");
+    const isBetter = (candidate, current) => {
+      if (!current) return true;
+      if (candidate.rp !== current.rp) return candidate.rp < current.rp;
+      if (candidate.priorityScore !== current.priorityScore) {
+        return candidate.priorityScore > current.priorityScore;
+      }
+      return candidate.mask < current.mask;
+    };
+    const addState = (states, state) => {
+      const key = countsKey(state.counts);
+      if (isBetter(state, states.get(key))) states.set(key, state);
+    };
+    const mergeStates = (leftStates, rightStates) => {
+      const merged = new Map();
+
+      for (const left of leftStates.values()) {
+        for (const right of rightStates.values()) {
+          const counts = left.counts.map((count, rankIndex) =>
+            Math.min(
+              requirements[rankIndex],
+              count + right.counts[rankIndex],
+            ),
+          );
+          addState(merged, {
+            counts,
+            rp: left.rp + right.rp,
+            priorityScore: left.priorityScore + right.priorityScore,
+            mask: left.mask | right.mask,
+          });
         }
       }
 
-      return count;
+      return merged;
     };
 
-    const isBetterPriorityResult = (selectedIds, counts) => {
-      const cost = costOf(selectedIds);
-      const score = priorityScoreOf(selectedIds);
-
-      if (!priorityResult) {
-        priorityResult = {
-          selectedIds: new Set(selectedIds),
-          rankCounts: [...counts],
-          totalRp: cost.rp,
-          totalSp: cost.sp,
-          priorityScore: score,
-        };
-        return;
-      }
-
-      if (
-        score > priorityResult.priorityScore ||
-        (score === priorityResult.priorityScore &&
-          (cost.rp < priorityResult.totalRp ||
-            (cost.rp === priorityResult.totalRp &&
-              cost.sp < priorityResult.totalSp)))
-      ) {
-        priorityResult = {
-          selectedIds: new Set(selectedIds),
-          rankCounts: [...counts],
-          totalRp: cost.rp,
-          totalSp: cost.sp,
-          priorityScore: score,
-        };
-      }
+    const forcedSubtreeCache = new Map();
+    const hasForcedSubtree = (id) => {
+      if (forcedSubtreeCache.has(id)) return forcedSubtreeCache.get(id);
+      const forced =
+        initialSelected.has(id) ||
+        (children.get(id) || []).some(hasForcedSubtree);
+      forcedSubtreeCache.set(id, forced);
+      return forced;
     };
+
+    const subtreeCache = new Map();
+    const solveSubtree = (id) => {
+      if (subtreeCache.has(id)) return subtreeCache.get(id);
+
+      const entry = graph.research.get(id);
+      if (isIgnoredMultipleFiller(entry) && !hasForcedSubtree(id)) {
+        const skippedStates = new Map();
+        addState(skippedStates, {
+          counts: zeroCounts(),
+          rp: 0,
+          priorityScore: 0,
+          mask: 0n,
+        });
+        subtreeCache.set(id, skippedStates);
+        return skippedStates;
+      }
+
+      const nodeCounts = zeroCounts();
+      nodeCounts[entry.rankIndex] = Math.min(
+        1,
+        requirements[entry.rankIndex],
+      );
+      const isOwned = ownedIds.has(id);
+      let selectedStates = new Map();
+      addState(selectedStates, {
+        counts: nodeCounts,
+        rp: isOwned ? 0 : entry.rp,
+        priorityScore:
+          !isOwned &&
+          entry.rankIndex < targetRankIndex &&
+          priorityColumnSet.has(entry.columnIndex)
+            ? 1
+            : 0,
+        mask: 1n << BigInt(entryIndex.get(id)),
+      });
+
+      for (const childId of children.get(id) || []) {
+        selectedStates = mergeStates(selectedStates, solveSubtree(childId));
+      }
+
+      if (!hasForcedSubtree(id)) {
+        addState(selectedStates, {
+          counts: zeroCounts(),
+          rp: 0,
+          priorityScore: 0,
+          mask: 0n,
+        });
+      }
+
+      subtreeCache.set(id, selectedStates);
+      return selectedStates;
+    };
+
+    let states = new Map();
+    const premiumBaseCounts = capCounts(premiumCounts);
+    addState(states, {
+      counts: premiumBaseCounts,
+      rp: 0,
+      priorityScore: 0,
+      mask: 0n,
+    });
+
+    for (const rootId of roots) {
+      states = mergeStates(states, solveSubtree(rootId));
+    }
+
+    const requiredKey = countsKey(requirements);
+    const best = states.get(requiredKey);
+    if (!best) {
+      return {
+        ok: false,
+        selectedIds: researchIdsOf(initialSelected),
+        premiumIds: [...premiumIds],
+        totalRp: costOf(initialSelected).rp,
+        totalSp: costOf(initialSelected).sp,
+        rankCounts: initialCounts,
+        warnings: [
+          ...warnings,
+          "No valid route satisfies rank requirements and dependencies.",
+        ],
+        graph,
+        mode: searchMode,
+        priorityScore: 0,
+        searchComplete: true,
+        ownedIds: [...ownedIds],
+      };
+    }
+
+    const selectedIds = entries
+      .filter((entry, index) => (best.mask & (1n << BigInt(index))) !== 0n)
+      .map((entry) => entry.id);
+    const selectedSet = new Set(selectedIds);
+    const finalCounts = countRanks(selectedSet);
+    const finalCost = costOf(selectedSet);
+
+    return {
+      ok: true,
+      selectedIds: researchIdsOf(selectedSet),
+      premiumIds: [...premiumIds],
+      totalRp: best.rp,
+      totalSp: finalCost.sp,
+      rankCounts: finalCounts,
+      warnings,
+      graph,
+      mode: searchMode,
+      priorityScore: best.priorityScore,
+      searchComplete: true,
+      ownedIds: [...ownedIds],
+    };
+  };
+
+  if (priorityColumns.length > 0 && normalizedPriorityMode === "soft") {
+    return solveExactMinimumRoute();
+  }
+
+  if (priorityColumns.length > 0 && normalizedPriorityMode === "hard") {
+    let priorityResult = null;
+    let limitReached = false;
+    const visited = new Set();
 
     const searchByPriority = (selectedIds, counts) => {
+      if (iterations >= maxIterations) {
+        limitReached = true;
+        return false;
+      }
       iterations++;
-      if (iterations > maxIterations) return false;
 
       const rankIndex = firstOpenRank(counts);
 
       if (rankIndex === -1) {
-        if (allowRankOverflow) {
-          const cost = costOf(selectedIds);
-          priorityResult = {
-            selectedIds: new Set(selectedIds),
-            rankCounts: [...counts],
-            totalRp: cost.rp,
-            totalSp: cost.sp,
-            priorityScore: priorityScoreOf(selectedIds),
-          };
-          return true;
-        }
-
-        isBetterPriorityResult(selectedIds, counts);
-        return false;
+        const cost = costOf(selectedIds);
+        priorityResult = {
+          selectedIds: new Set(selectedIds),
+          rankCounts: [...counts],
+          totalRp: cost.rp,
+          totalSp: cost.sp,
+          priorityScore: priorityScoreOf(selectedIds),
+        };
+        return true;
       }
 
       const key = makeKey(selectedIds, rankIndex);
@@ -500,19 +656,21 @@ export function planShortestResearchPath({
       const candidates = [...graph.research.values()]
         .filter((candidate) => candidate.rankIndex < targetRankIndex)
         .filter((candidate) => !selectedIds.has(candidate.id))
+        .filter((candidate) => !isIgnoredMultipleFiller(candidate))
         .map((candidate) => {
           const packageIds = getClosure(candidate.id).filter(
             (id) => !selectedIds.has(id),
           );
-          const packageCost = costOfIds(packageIds);
-          const packageCounts = countRanks(new Set([...selectedIds, ...packageIds]));
+          const packageRp = rpOfIds(packageIds);
+          const packageCounts = countRanks(
+            new Set([...selectedIds, ...packageIds]),
+          );
           const addedInRank = packageCounts[rankIndex] - counts[rankIndex];
 
           return {
             candidate,
             packageIds,
-            packageRp: packageCost.rp,
-            packageSp: packageCost.sp,
+            packageRp,
             addedInRank,
           };
         })
@@ -534,12 +692,10 @@ export function planShortestResearchPath({
 
           if (aIsSpecified && bIsSpecified) {
             if (a.packageRp !== b.packageRp) return a.packageRp - b.packageRp;
-            if (a.packageSp !== b.packageSp) return a.packageSp - b.packageSp;
           }
 
           if (hasFold) {
             if (a.packageRp !== b.packageRp) return a.packageRp - b.packageRp;
-            if (a.packageSp !== b.packageSp) return a.packageSp - b.packageSp;
           }
 
           if (a.candidate.rankIndex !== b.candidate.rankIndex) {
@@ -561,12 +717,7 @@ export function planShortestResearchPath({
 
         const nextCounts = countRanks(nextSelected);
         const addedInRank = nextCounts[rankIndex] - counts[rankIndex];
-        const remaining = requirements[rankIndex] - counts[rankIndex];
-
         if (addedInRank <= 0) continue;
-        if (!allowRankOverflow && addedInRank > remaining) continue;
-        if (!allowRankOverflow && overflows(nextCounts)) continue;
-
         if (searchByPriority(nextSelected, nextCounts)) return true;
       }
 
@@ -578,131 +729,46 @@ export function planShortestResearchPath({
     if (!priorityResult) {
       return {
         ok: false,
-        selectedIds: [...initialSelected],
+        selectedIds: researchIdsOf(initialSelected),
         premiumIds: [...premiumIds],
         totalRp: costOf(initialSelected).rp,
         totalSp: costOf(initialSelected).sp,
         rankCounts: initialCounts,
         warnings: [
           ...warnings,
-          iterations > maxIterations
+          limitReached
             ? "Priority route search reached the iteration limit before finding a valid route."
-            : "No valid priority route satisfies exact rank counts and dependencies.",
+            : "No valid priority route satisfies rank requirements and dependencies.",
         ],
         graph,
         mode: searchMode,
+        searchComplete: !limitReached,
+        ownedIds: [...ownedIds],
       };
     }
 
     return {
       ok: true,
-      selectedIds: [...priorityResult.selectedIds],
+      selectedIds: researchIdsOf(priorityResult.selectedIds),
       premiumIds: [...premiumIds],
       totalRp: priorityResult.totalRp,
       totalSp: priorityResult.totalSp,
       rankCounts: priorityResult.rankCounts,
-      warnings:
-        !allowRankOverflow && priorityResult.priorityScore === 0
+      warnings: [
+        ...warnings,
+        ...(limitReached
           ? [
-              ...warnings,
-              `No exact-count legal route could include priority columns: ${priorityColumns.join(", ")}`,
+              "Priority route search reached the iteration limit; the returned route is valid but may not be optimal.",
             ]
-          : warnings,
+          : []),
+      ],
       graph,
       mode: searchMode,
       priorityScore: priorityResult.priorityScore,
+      searchComplete: !limitReached,
+      ownedIds: [...ownedIds],
     };
   }
 
-  let best = null;
-  const memo = new Map();
-
-  const search = (selectedIds, counts) => {
-    iterations++;
-    if (iterations > maxIterations) return;
-
-    const cost = costOf(selectedIds);
-
-    if (best && cost.rp >= best.totalRp) return;
-    if (best && cost.rp + lowerBoundRp(counts, selectedIds) >= best.totalRp) {
-      return;
-    }
-
-    const rankIndex = firstOpenRank(counts);
-
-    if (rankIndex === -1) {
-      if (!best || cost.rp < best.totalRp || (cost.rp === best.totalRp && cost.sp < best.totalSp)) {
-        best = {
-          selectedIds: new Set(selectedIds),
-          rankCounts: [...counts],
-          totalRp: cost.rp,
-          totalSp: cost.sp,
-        };
-      }
-      return;
-    }
-
-    const key = makeKey(selectedIds, rankIndex);
-    const previousCost = memo.get(key);
-    if (previousCost != null && previousCost <= cost.rp) return;
-    memo.set(key, cost.rp);
-
-    const remaining = requirements[rankIndex] - counts[rankIndex];
-    const candidates = graph.byRank.get(rankIndex) || [];
-
-    for (const candidate of candidates) {
-      if (selectedIds.has(candidate.id)) continue;
-
-      const packageIds = getClosure(candidate.id).filter(
-        (id) => !selectedIds.has(id),
-      );
-
-      if (!packageIds.length) continue;
-
-      const nextSelected = new Set(selectedIds);
-      for (const id of packageIds) nextSelected.add(id);
-
-      const nextCounts = countRanks(nextSelected);
-      const addedInRank = nextCounts[rankIndex] - counts[rankIndex];
-
-      if (addedInRank <= 0 || addedInRank > remaining) continue;
-      if (overflows(nextCounts)) continue;
-
-      search(nextSelected, nextCounts);
-    }
-  };
-
-  search(initialSelected, initialCounts);
-
-  if (!best) {
-    return {
-      ok: false,
-      selectedIds: [...initialSelected],
-      premiumIds: [...premiumIds],
-      totalRp: costOf(initialSelected).rp,
-      totalSp: costOf(initialSelected).sp,
-      rankCounts: initialCounts,
-      warnings: [
-        ...warnings,
-        iterations > maxIterations
-          ? "Route search reached the iteration limit before finding a valid route."
-          : "No valid route satisfies exact rank counts and dependencies.",
-      ],
-      graph,
-      mode: "min-rp",
-    };
-  }
-
-  return {
-    ok: true,
-    selectedIds: [...best.selectedIds],
-    premiumIds: [...premiumIds],
-    totalRp: best.totalRp,
-    totalSp: best.totalSp,
-    rankCounts: best.rankCounts,
-    warnings,
-    graph,
-    mode: "min-rp",
-    priorityScore: 0,
-  };
+  return solveExactMinimumRoute();
 }

@@ -5,8 +5,8 @@
       :key="index"
       class="priority-item"
       :class="{
-        selected: getPriority(index) > 0,
-        not_select: ignoreColumns.includes(index)
+        selected: getPriority(index) > 0 && !ignoreColumns.includes(index),
+        not_select: ignoreColumns.includes(index),
       }"
       @click="toggle(index)"
     >

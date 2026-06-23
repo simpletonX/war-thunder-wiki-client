@@ -465,8 +465,14 @@ export const preset_wallpapers = [
   {
     value: "default",
     url: "https://staticfiles.warthunder.com/upload/image/media/bg/reel-2023.mp4",
-    label: "[默认] reel-2023.mp4",
+    label: "reel-2023.mp4",
     type: "video",
+  },
+  {
+    value: "victory_day_2026",
+    url: "https://staticfiles.warthunder.com/upload/image/0_Wallpaper_Renders/Other/1920x1080_victory_day_2026_logo_602e1a54af7fac44271a481f0fb798ea.jpg",
+    label: "victory_day_2026",
+    type: "image",
   },
   {
     value: "aircraft_marathon_sky_farmer",
@@ -478,12 +484,6 @@ export const preset_wallpapers = [
     value: "spitfire_lf_mk9c_cw_greece",
     url: "https://staticfiles.warthunder.com/upload/image/0_Wallpaper_Renders/Aircraft/1920x1080_spitfire_lf_mk9c_cw_greece_logo_dc1ebf0983fbb16aa7b7fed086198fa8.jpg",
     label: "spitfire_lf_mk9c_cw_greece",
-    type: "image",
-  },
-  {
-    value: "victory_day_2026",
-    url: "https://staticfiles.warthunder.com/upload/image/0_Wallpaper_Renders/Other/1920x1080_victory_day_2026_logo_602e1a54af7fac44271a481f0fb798ea.jpg",
-    label: "victory_day_2026",
     type: "image",
   },
   {

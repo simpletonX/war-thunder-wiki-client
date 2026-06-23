@@ -15,25 +15,19 @@ request.interceptors.request.use(
     const treeDataStore = useTreeDataStore();
     treeDataStore.loading.hide();
     return Promise.reject(error);
-  }
+  },
 );
 
 request.interceptors.response.use(
   (response) => {
-    const res = response.data;
-    if (!res.success) {
-      console.warn("⚠️ 接口返回错误:", res.error || "未知错误");
-      const treeDataStore = useTreeDataStore();
-      treeDataStore.loading.hide();
-    }
-    return res;
+    return response.data;
   },
   (error) => {
     console.error("❌ 响应错误:", error);
     const treeDataStore = useTreeDataStore();
     treeDataStore.loading.hide();
     return Promise.reject(error);
-  }
+  },
 );
 
 export default request;

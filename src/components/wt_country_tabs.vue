@@ -1,6 +1,6 @@
 <template>
   <div
-    class="country-tabs absolute z-100 w-[64px] left-[-90px] text-white"
+    class="country-tabs absolute z-100 w-[64px] left-[-82px] text-white"
   >
     <div
       class="country-tabs-container relative h-full flex justify-center content-center flex-wrap"

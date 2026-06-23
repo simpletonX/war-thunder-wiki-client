@@ -11,19 +11,28 @@
         default_select_mode: !settings.true_tree_mode,
         unactive_mode: totalSelectNum,
         selected: isItemSelected(item),
+        planning_target:
+          targetVehicleIds.has(item.data_unit_id) ||
+          item.items?.some((subItem) =>
+            targetVehicleIds.has(subItem.data_unit_id),
+          ),
+        mark_owned:
+          ownedVehicleIds.has(item.data_unit_id) ||
+          item.items?.some((subItem) =>
+            ownedVehicleIds.has(subItem.data_unit_id),
+          ),
         single_item: item.type == 'single',
         [item.class_name || 'default']: true,
       }"
       :style="{
         marginTop: `${86 * (helicopters?.move_bottom || 0)}px`,
       }"
-      @contextmenu.prevent.stop="openContextMenu(item)"
+      @contextmenu.prevent.stop="openFastFuncs($event, item)"
       :data_unit_id="item.data_unit_id"
     >
       <div
         class="inner-click-mask cursor-pointer absolute w-full h-full top-0 left-0"
         @click="clickTrigger(item)"
-        draggable="true"
       >
         <div class="icon absolute bottom-[3px] left-[2px]">
           <img :src="item.vehicle_icon" loading="lazy" v-fade-image />
@@ -59,7 +68,7 @@
           class="war-points-number absolute right-[2px] bottom-[4px] flex items-center"
           v-if="currentPointsType == 1 && isDefault"
         >
-          <span class="text-[12px] mr-[1px]">{{
+          <span class="text-[12px] mr-[1px] pt-[2px]">{{
             item.items
               ? item.items[0].rp_view || "初始"
               : item.rp_view || "初始"
@@ -71,7 +80,7 @@
           class="war-points-number absolute right-[3px] bottom-[4px] flex items-center"
           v-if="currentPointsType == 2 && isDefault"
         >
-          <span class="text-[12px] mr-[1px]">{{
+          <span class="text-[12px] mr-[1px] pt-[2px]">{{
             item.items
               ? item.items[0].sp_view || "初始"
               : item.sp_view || "初始"
@@ -88,6 +97,12 @@
 
         <!-- 选中态显示图标 -->
         <PhArrowFatLineUp class="selected-icon" :size="17" />
+
+        <!-- 被视为规划目标时的额外标识 -->
+        <div class="target_mark">目标载具</div>
+
+        <!-- 自动规划基线中已拥有载具的额外标识 -->
+        <div class="owned_mark" v-if="!isPremium">已拥有</div>
       </div>
 
       <!-- 直升机指向箭头 -->
@@ -203,34 +218,6 @@
       >
         <div class="arrow-tip w-0 h-0 absolute bottom-[-4px] left-[-3px]"></div>
       </div>
-
-      <!-- 快捷功能栏 -->
-      <div
-        class="fast-funcs flex items-center"
-        v-if="
-          contextmenu_state.target_data_unit_id === item.data_unit_id &&
-          contextmenu_state.visible
-        "
-      >
-        <div class="func-item" @click="automaticPlanning(item)">
-          <div class="flex justify-center">
-            <PhArrowElbowLeftUp :size="18" />
-          </div>
-          <p class="label">向上全选</p>
-        </div>
-        <div class="func-item" @click="joinQueue(item)">
-          <div class="flex justify-center">
-            <PhFunction :size="18" />
-          </div>
-          <p class="label">加入队列</p>
-        </div>
-        <div class="func-item" @click="jumpDetails(item)">
-          <div class="flex justify-center">
-            <PhArrowRight :size="18" />
-          </div>
-          <p class="label">跳转详情</p>
-        </div>
-      </div>
     </div>
 
     <!-- 展开折叠载具 -->
@@ -248,11 +235,13 @@
               default_select_mode: !settings.true_tree_mode,
               unactive_mode: totalSelectNum,
               selected: selected_state_map[subItem.data_unit_id],
+              planning_target: targetVehicleIds.has(subItem.data_unit_id),
+              mark_owned: ownedVehicleIds.has(subItem.data_unit_id),
               single_item: subItem.type == 'single',
               [subItem.class_name || 'default']: true,
             }"
             @click="clickTrigger(subItem)"
-            @contextmenu.prevent.stop="openContextMenu(subItem)"
+            @contextmenu.prevent.stop="openFastFuncs($event, subItem)"
           >
             <div class="icon absolute bottom-[3px] left-[2px]">
               <img :src="subItem.vehicle_icon" alt="" />
@@ -279,7 +268,7 @@
               class="war-points-number absolute right-[2px] bottom-[4px] flex items-center"
               v-if="currentPointsType == 1 && isDefault"
             >
-              <span class="text-[12px] mr-[1px]">{{
+              <span class="text-[12px] mr-[1px] pt-[2px]">{{
                 subItem.rp_view || "初始"
               }}</span>
               <img :src="`/static/rp.png`" class="w-[16px]" />
@@ -289,7 +278,7 @@
               class="war-points-number absolute right-[3px] bottom-[4px] flex items-center"
               v-if="currentPointsType == 2 && isDefault"
             >
-              <span class="text-[12px] mr-[1px]">{{
+              <span class="text-[12px] mr-[1px] pt-[2px]">{{
                 subItem.sp_view || "初始"
               }}</span>
               <img :src="`/static/war-points.png`" class="w-[18px]" />
@@ -314,33 +303,11 @@
             <!-- 选中态显示图标 -->
             <PhArrowFatLineUp class="selected-icon" :size="17" />
 
-            <!-- 快捷功能栏 -->
-            <div
-              class="fast-funcs flex items-center"
-              v-if="
-                contextmenu_state.target_data_unit_id ===
-                  subItem.data_unit_id && contextmenu_state.visible
-              "
-            >
-              <div class="func-item" @click="automaticPlanning(subItem)">
-                <div class="flex justify-center">
-                  <PhArrowElbowLeftUp :size="18" />
-                </div>
-                <p class="label">向上全选</p>
-              </div>
-              <div class="func-item">
-                <div class="flex justify-center" @click="joinQueue(subItem)">
-                  <PhFunction :size="18" />
-                </div>
-                <p class="label">加入队列</p>
-              </div>
-              <div class="func-item" @click="jumpDetails(subItem)">
-                <div class="flex justify-center">
-                  <PhArrowRight :size="18" />
-                </div>
-                <p class="label">跳转详情</p>
-              </div>
-            </div>
+            <!-- 被视为规划目标时的额外标识 -->
+            <div class="target_mark">目标载具</div>
+
+            <!-- 自动规划基线中已拥有载具的额外标识 -->
+            <div class="owned_mark" v-if="!isPremium">已拥有</div>
           </div>
         </div>
       </transition>
@@ -352,14 +319,8 @@
 import { computed, defineProps, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { usePublicMaskStore } from "@/stores/public_mask";
-import { toggleSelectColumnAbove } from "@/utils/treeDataUtils";
 import { useTreeDataStore } from "@/stores/tree_data_store";
-import {
-  PhArrowFatLineUp,
-  PhArrowRight,
-  PhArrowElbowLeftUp,
-  PhFunction,
-} from "@phosphor-icons/vue";
+import { PhArrowFatLineUp } from "@phosphor-icons/vue";
 import { terminal_vehicles } from "@/utils/terminal_vehicles";
 import { main_role_icons } from "@/utils/icon_svgs";
 
@@ -376,12 +337,15 @@ const props = defineProps({
   currentPointsType: { type: Number, default: 0 },
   // 当前载具箭头计算数据元信息
   arrow_points: { type: Object, required: false },
+  // 自动规划 targets 中的载具 ID
+  targetVehicleIds: { type: Set, default: () => new Set() },
+  // 自动规划时作为已拥有基线的可研发载具 ID
+  ownedVehicleIds: { type: Set, default: () => new Set() },
 });
-const emit = defineEmits(["jumpItemDetailPage, joinQueue"]);
+const emit = defineEmits(["open-fast-funcs"]);
 
 const treeDataStore = useTreeDataStore();
-const { settings, selected_state_map, tree_data, types, contextmenu_state } =
-  storeToRefs(treeDataStore);
+const { settings, selected_state_map, types } = storeToRefs(treeDataStore);
 const is_terminal = computed(
   () =>
     terminal_vehicles[types.value.country_code][types.value.vehicle_type][
@@ -477,51 +441,25 @@ watch(
   },
 );
 
-/**
- * 右键自动选择当前载具以及同列的上方所有载具
- */
-function automaticPlanning(item) {
-  let clicked_item;
-  if (item.type == "multiple") {
-    // settings.multiple_mode: true -> 列选中的最终节点为当下第一个折叠载具
-    if (settings.value.multiple_mode) {
-      clicked_item = item.items[0];
-    }
-    // settings.multiple_mode: false -> 列选中的最终节点为当下最后一个折叠载具
-    else {
-      clicked_item = item.items[item.items.length - 1];
-    }
-  } else {
-    clicked_item = item;
-  }
-
-  toggleSelectColumnAbove({
-    tree_data,
-    clicked_item,
-    selected_state_map,
-  });
-}
-
-// 跳转详情页
-function jumpDetails(item) {
-  emit("jumpItemDetailPage", item);
-}
-
-// 打开右键菜单
-function openContextMenu(target_item) {
+// 将右键目标及其窗口坐标交给 App.vue 中唯一的快捷功能栏。
+function openFastFuncs(event, target_item) {
   if (target_item.type == "multiple") {
     return;
   }
-  contextmenu_state.value.target_data_unit_id = target_item.data_unit_id;
-  contextmenu_state.value.visible = true;
-}
 
-// 加入动态规划队列
-function joinQueue(item) {
-  emit("joinQueue", {
+  const rect = event.currentTarget.getBoundingClientRect();
+  emit("open-fast-funcs", {
+    item: target_item,
     isPremium: props.isPremium,
     colIndex: props.colIndex,
-    item,
+    anchorRect: {
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+    },
   });
 }
 </script>
@@ -533,52 +471,6 @@ function joinQueue(item) {
 </style>
 
 <style scoped>
-.fast-funcs {
-  position: absolute;
-  right: 0;
-  bottom: -60px;
-  background-color: #1c2b2e;
-  z-index: 11;
-  border-radius: 4px;
-  box-shadow: 0 5px 15px 1px rgba(0, 0, 0, 0.4);
-  border: 1px solid rgb(37, 55, 60);
-  padding: 4px;
-  animation: showOpa 0.2s;
-}
-@keyframes showOpa {
-  0% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-.fast-funcs::before {
-  content: "";
-  position: absolute;
-  top: -6px;
-  right: 20px;
-  width: 0;
-  height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 6px solid #1c2b2e;
-}
-.func-item {
-  width: 58px;
-  padding: 2px 0;
-  border-radius: 5px;
-  cursor: pointer;
-}
-.func-item:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-.func-item .label {
-  font-size: 11px;
-  margin-top: 2px;
-  color: #c9c9c9;
-  text-align: center;
-}
 .main_role {
   position: absolute;
   bottom: 6px;
@@ -642,11 +534,11 @@ function joinQueue(item) {
   /* 高级载具选中状态图标主题色 */
   --squad-icon-bg: rgba(126, 227, 31, 0.5);
   /* 普通载具选中状态顶边框色 */
-  --default-selected_border_top: #adadad;
+  --default-selected_border_top: #cacaca;
   /* 高级载具选中状态顶边框色 */
-  --prem-selected_border_top: #daac50;
+  --prem-selected_border_top: #ecbd61;
   /* 联队载具选中状态顶边框色 */
-  --squad-selected_border_top: #7ecd46;
+  --squad-selected_border_top: #52e371;
 }
 /* 高级载具未选中状态配色 */
 .wt-tree-item.prem {
@@ -717,7 +609,7 @@ function joinQueue(item) {
   );
 }
 .wt-tree-item.unactive_mode:not(.true_select_mode) {
-  opacity: 0.4;
+  opacity: 0.6;
 }
 .wt-tree-item.selected {
   opacity: 1 !important;
@@ -777,6 +669,32 @@ function joinQueue(item) {
   opacity: 0.3;
 }
 /* 其它样式 + ------------------------------------------------------- + */
+.target_mark {
+  display: none;
+  position: absolute;
+  top: -24px;
+  right: -1px;
+  background-color: #c46913;
+  font-size: 12px;
+  line-height: 22px;
+  padding: 2px 5px 0;
+}
+.wt-tree-item.planning_target .target_mark {
+  display: block;
+}
+.owned_mark {
+  display: none;
+  position: absolute;
+  top: -24px;
+  right: -1px;
+  background-color: rgb(14, 80, 167);
+  font-size: 12px;
+  line-height: 22px;
+  padding: 2px 5px 0;
+}
+.wt-tree-item.mark_owned .owned_mark {
+  display: block;
+}
 .wt-tree-item .icon img {
   height: 46px;
 }

@@ -19,9 +19,7 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from "vue";
-
-const props = defineProps(["modelValue"]);
+defineProps(["modelValue"]);
 const emits = defineEmits(["update:modelValue"]);
 
 function close_mask() {
@@ -45,7 +43,7 @@ function close_mask() {
 }
 .public_dialog_main {
   padding: 20px 22px 12px;
-  max-height: 80vh;
+  max-height: calc(96vh - 80px);
   overflow: auto;
 }
 .public_dialog_main::-webkit-scrollbar {

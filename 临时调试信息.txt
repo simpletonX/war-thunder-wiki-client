@@ -1,0 +1,123 @@
+【一键规划完整参数】
+{
+  "targets": [
+    {
+      "data_unit_id": "cn_m1a2t"
+    },
+    {
+      "data_unit_id": "cn_zbd_04a"
+    }
+  ],
+  "planned_prems": [
+    {
+      "data_unit_id": "cn_ztz_96b"
+    },
+    {
+      "data_unit_id": "cn_wma_301"
+    }
+  ],
+  "owned_researchables": [
+    {
+      "data_unit_id": "cn_m8_greyhound"
+    },
+    {
+      "data_unit_id": "cn_t_26_1940"
+    },
+    {
+      "data_unit_id": "cn_type_97_chi_ha"
+    },
+    {
+      "data_unit_id": "cn_sdkfz_222_early"
+    },
+    {
+      "data_unit_id": "cn_m8_scott"
+    },
+    {
+      "data_unit_id": "cn_su_76m_1943"
+    },
+    {
+      "data_unit_id": "cn_lvt_4_zis_2"
+    },
+    {
+      "data_unit_id": "cn_gmc_cckw_353_m45_quad"
+    },
+    {
+      "data_unit_id": "cn_type_97_kai"
+    },
+    {
+      "data_unit_id": "cn_m3a3_stuart"
+    },
+    {
+      "data_unit_id": "cn_m24_chaffee"
+    },
+    {
+      "data_unit_id": "cn_m4a4_sherman"
+    },
+    {
+      "data_unit_id": "cn_m10"
+    },
+    {
+      "data_unit_id": "cn_m55"
+    },
+    {
+      "data_unit_id": "cn_m42_duster"
+    },
+    {
+      "data_unit_id": "cn_t_34_1942"
+    },
+    {
+      "data_unit_id": "cn_object_211"
+    },
+    {
+      "data_unit_id": "cn_t_34_85_d_5t"
+    },
+    {
+      "data_unit_id": "cn_type_65_aa"
+    },
+    {
+      "data_unit_id": "cn_isu_152"
+    },
+    {
+      "data_unit_id": "cn_m36"
+    },
+    {
+      "data_unit_id": "cn_su_100_1945"
+    },
+    {
+      "data_unit_id": "cn_m18_hellcat"
+    },
+    {
+      "data_unit_id": "cn_type_63_i"
+    },
+    {
+      "data_unit_id": "cn_plz_83"
+    },
+    {
+      "data_unit_id": "cn_zts_63_1980"
+    },
+    {
+      "data_unit_id": "cn_is_2_1943"
+    },
+    {
+      "data_unit_id": "cn_zsd63_pg87"
+    }
+  ],
+  "priority_column": [
+    1
+  ],
+  "priority_mode": "soft"
+}
+
+【开始执行一键规划】
+{
+  "状态": "开始执行一键规划",
+  "时间": "2026/6/20 23:22:32",
+  "国家": "china",
+  "军种": "ground"
+}
+
+【规划算法警告】
+暂无算法警告
+
+最终的【selected_state_map】：
+{"cn_m_41d":true,"cn_m60a3_tts":true,"cn_cm11":true,"cn_mbt2000":true,"cn_vt_4":true,"cn_vt_4b":true,"cn_m1a2t":true,"cn_plz_05":true,"cn_m113a1_tow":true,"cn_cm_25":true,"cn_ptl_02":true,"cn_cm_34":true,"cn_ztl_11":true,"cn_zbd_04a":true,"cn_m48a1_patton_iii":true,"cn_type_86":true,"cn_type_59":true,"cn_type_59d":true,"cn_ztz_88b":true,"cn_ztz_96":true,"cn_ztz_96a":true,"cn_ztz_96b":true,"cn_wma_301":true,"cn_m8_greyhound":true,"cn_t_26_1940":true,"cn_type_97_chi_ha":true,"cn_sdkfz_222_early":true,"cn_m8_scott":true,"cn_su_76m_1943":true,"cn_lvt_4_zis_2":true,"cn_gmc_cckw_353_m45_quad":true,"cn_type_97_kai":true,"cn_m3a3_stuart":true,"cn_m24_chaffee":true,"cn_m4a4_sherman":true,"cn_m10":true,"cn_m55":true,"cn_m42_duster":true,"cn_t_34_1942":true,"cn_object_211":true,"cn_t_34_85_d_5t":true,"cn_type_65_aa":true,"cn_isu_152":true,"cn_m36":true,"cn_su_100_1945":true,"cn_m18_hellcat":true,"cn_type_63_i":true,"cn_plz_83":true,"cn_zts_63_1980":true,"cn_is_2_1943":true,"cn_zsd63_pg87":true}

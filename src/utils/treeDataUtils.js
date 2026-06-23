@@ -16,7 +16,9 @@ export function toggleSelectColumnAbove({
   // ① 自动判断 toggle 状态
   // =========================
   const clickedId =
-    clicked_item?.data_unit_id || clicked_item?.items?.[0]?.data_unit_id;
+    clicked_item?.type === "multiple"
+      ? clicked_item.items?.[0]?.data_unit_id
+      : clicked_item?.data_unit_id;
 
   if (!clickedId) return;
 
@@ -37,13 +39,26 @@ export function toggleSelectColumnAbove({
       for (let i = 0; i < col.length; i++) {
         const item = col[i];
 
-        if (item === clicked_item) {
+        if (
+          clicked_item.type === "multiple" &&
+          item.data_unit_id === clicked_item.data_unit_id
+        ) {
           pos = { r, c, i, sub: null };
           break;
         }
 
-        if (item.items) {
-          const sub = item.items.indexOf(clicked_item);
+        if (
+          clicked_item.type !== "multiple" &&
+          item.data_unit_id === clicked_item.data_unit_id
+        ) {
+          pos = { r, c, i, sub: null };
+          break;
+        }
+
+        if (Array.isArray(item.items)) {
+          const sub = item.items.findIndex(
+            (child) => child.data_unit_id === clicked_item.data_unit_id,
+          );
           if (sub !== -1) {
             pos = { r, c, i, sub };
             break;
@@ -129,6 +144,8 @@ export function toggleResearchableSelectAll({
   tree_data,
   selected_state_map,
   settings,
+  falseEffect,
+  trueEffect,
 }) {
   const store = useTreeDataStore();
   const isAllSelectMode = settings.value.all_select_mode;
@@ -182,6 +199,8 @@ export function toggleResearchableSelectAll({
   if (isAllSelected) {
     selected_state_map.value = {};
     store.updateSelectedStateMapAllLocal({});
+    // 执行反选后的副作用函数
+    falseEffect && falseEffect();
     return;
   }
 
@@ -220,6 +239,8 @@ export function toggleResearchableSelectAll({
 
   selected_state_map.value = map;
   store.updateSelectedStateMapAllLocal(map, true);
+  // 执行全选后的副作用函数
+  trueEffect && trueEffect();
 }
 
 // 创建researchable索引表
@@ -416,10 +437,10 @@ export function createArrowPointsMap(tree_data) {
 export function createVehicleCostMap(tree_data) {
   const map = {};
 
-  const collect = (items, rank) => {
+  const collect = (items, rank, isPremium) => {
     for (const item of items) {
       if (item.type === "multiple") {
-        collect(item.items, rank);
+        collect(item.items, rank, isPremium);
         continue;
       }
 
@@ -427,6 +448,7 @@ export function createVehicleCostMap(tree_data) {
         rank,
         rp: parseNumber(item.rp),
         sp: parseNumber(item.sp),
+        isPremium,
       };
     }
   };
@@ -435,11 +457,11 @@ export function createVehicleCostMap(tree_data) {
     const rank = rankData.rank;
 
     for (const col of rankData.researchable_vehicles || []) {
-      collect(col, rank);
+      collect(col, rank, false);
     }
 
     for (const col of rankData.premium_vehicles || []) {
-      collect(col, rank);
+      collect(col, rank, true);
     }
   }
 
@@ -447,19 +469,21 @@ export function createVehicleCostMap(tree_data) {
 }
 
 // 计算RP/SP元数据映射结果
-export function calculateRankStats(selected_state_map, vehicle_cost_map) {
-  const stats = {
-    I: { rp: 0, sp: 0, count: 0 },
-    II: { rp: 0, sp: 0, count: 0 },
-    III: { rp: 0, sp: 0, count: 0 },
-    IV: { rp: 0, sp: 0, count: 0 },
-    V: { rp: 0, sp: 0, count: 0 },
-    VI: { rp: 0, sp: 0, count: 0 },
-    VII: { rp: 0, sp: 0, count: 0 },
-    VIII: { rp: 0, sp: 0, count: 0 },
-  };
+export function calculateRankStats(
+  selected_state_map,
+  vehicle_cost_map,
+  owned_vehicle_ids = new Set(),
+) {
+  const stats = {};
 
-  for (const data_unit_id in selected_state_map) {
+  // Rank 不应硬编码。由当前科技树的载具元数据动态创建统计项，
+  // 以支持空军 Rank IX 以及后续可能新增的更高 Rank。
+  for (const vehicle of Object.values(vehicle_cost_map || {})) {
+    if (!vehicle?.rank || stats[vehicle.rank]) continue;
+    stats[vehicle.rank] = { rp: 0, sp: 0, count: 0 };
+  }
+
+  for (const data_unit_id in selected_state_map || {}) {
     if (!selected_state_map[data_unit_id]) continue;
 
     const vehicle = vehicle_cost_map[data_unit_id];
@@ -468,8 +492,11 @@ export function calculateRankStats(selected_state_map, vehicle_cost_map) {
     const rank = vehicle.rank;
     if (!stats[rank]) continue;
 
-    stats[rank].rp += vehicle.rp;
-    stats[rank].sp += vehicle.sp;
+    // 高级载具参与 Rank 数量，但永远不计入 RP/SP。
+    if (!vehicle.isPremium && !owned_vehicle_ids.has(data_unit_id)) {
+      stats[rank].rp += vehicle.rp;
+      stats[rank].sp += vehicle.sp;
+    }
     stats[rank].count += 1;
   }
 
@@ -526,12 +553,16 @@ export function getColumnBoundaryVehicles(tree_data) {
 
       const item = column[column.length - 1];
 
-      lastFound =
-        item.type === "single"
-          ? item
-          : item.type === "multiple"
-            ? item.items?.[item.items.length - 1]
-            : null;
+      if (item.type === "single") {
+        lastFound = item;
+      } else if (item.type === "multiple") {
+        const lastSubItem = item.items?.[item.items.length - 1];
+
+        // 部分折叠组的末项没有有效 BR，不能作为列末端展示载具。
+        // 此时回退到该折叠组的第一个载具。
+        lastFound =
+          lastSubItem?.br == null ? item.items?.[0] : lastSubItem;
+      }
 
       if (lastFound) break;
     }
@@ -637,15 +668,23 @@ function normalizePlanResult({
   plan,
   treeData,
   targetIds,
+  ownedResearchIds = [],
   selectedStateMapRef,
 }) {
   const nextSelectedMap = {};
+  const ownedIdSet = new Set(ownedResearchIds);
 
   for (const id of plan.selectedIds || []) {
+    if (ownedIdSet.has(id)) continue;
     nextSelectedMap[id] = true;
   }
 
   for (const id of plan.premiumIds || []) {
+    nextSelectedMap[id] = true;
+  }
+
+  // 已拥有载具的选中状态必须保留，只在成本统计中忽略。
+  for (const id of ownedIdSet) {
     nextSelectedMap[id] = true;
   }
 
@@ -664,13 +703,16 @@ function normalizePlanResult({
     warnings: plan.warnings || [],
     mode: plan.mode,
     priority_score: plan.priorityScore || 0,
+    search_complete: plan.searchComplete !== false,
   };
 }
 export function findShortestPathToVehicle({
   targets = [],
   planned_prems = [],
+  owned_researchables = [],
   priority_column = [],
   priority_mode = "soft",
+  ignore_multiple = false,
 } = {}) {
   const treeDataStore = useTreeDataStore();
   const { tree_data, selected_state_map, types } = storeToRefs(treeDataStore);
@@ -685,11 +727,16 @@ export function findShortestPathToVehicle({
   const plannedPremiumIds = planned_prems
     .map(normalizeVehicleId)
     .filter(Boolean);
+  const ownedResearchIds = owned_researchables
+    .map(normalizeVehicleId)
+    .filter(Boolean);
+  treeDataStore.updateOwnedVehicleIds(ownedResearchIds);
 
   const plan = planShortestResearchPath({
     treeData,
     targetIds,
     plannedPremiumIds,
+    ownedResearchIds,
     unlockQuantityMap:
       unlock_quantitys?.[types.value.country_code]?.[
         types.value.vehicle_type
@@ -699,20 +746,24 @@ export function findShortestPathToVehicle({
     vehicleType: types.value.vehicle_type,
     priorityColumns: priority_column,
     priorityMode: priority_mode,
+    ignoreMultiple: ignore_multiple,
   });
 
   return normalizePlanResult({
     plan,
     treeData,
     targetIds,
+    ownedResearchIds,
     selectedStateMapRef: selected_state_map,
   });
 }
 export async function findShortestPathToVehicleWorker({
   targets = [],
   planned_prems = [],
+  owned_researchables = [],
   priority_column = [],
   priority_mode = "soft",
+  ignore_multiple = false,
 } = {}) {
   const treeDataStore = useTreeDataStore();
   const { tree_data, selected_state_map, types } = storeToRefs(treeDataStore);
@@ -727,6 +778,10 @@ export async function findShortestPathToVehicleWorker({
   const plannedPremiumIds = planned_prems
     .map(normalizeVehicleId)
     .filter(Boolean);
+  const ownedResearchIds = owned_researchables
+    .map(normalizeVehicleId)
+    .filter(Boolean);
+  treeDataStore.updateOwnedVehicleIds(ownedResearchIds);
 
   const worker = createResearchPathWorker();
 
@@ -734,8 +789,10 @@ export async function findShortestPathToVehicleWorker({
     return findShortestPathToVehicle({
       targets,
       planned_prems,
+      owned_researchables,
       priority_column,
       priority_mode,
+      ignore_multiple,
     });
   }
 
@@ -748,6 +805,7 @@ export async function findShortestPathToVehicleWorker({
         treeData,
         targetIds,
         plannedPremiumIds,
+        ownedResearchIds,
         unlockQuantityMap:
           unlock_quantitys?.[types.value.country_code]?.[
             types.value.vehicle_type
@@ -757,6 +815,7 @@ export async function findShortestPathToVehicleWorker({
         vehicleType: types.value.vehicle_type,
         priorityColumns: priority_column,
         priorityMode: priority_mode,
+        ignoreMultiple: ignore_multiple,
       },
     });
   });
@@ -765,6 +824,7 @@ export async function findShortestPathToVehicleWorker({
     plan,
     treeData,
     targetIds,
+    ownedResearchIds,
     selectedStateMapRef: selected_state_map,
   });
 }

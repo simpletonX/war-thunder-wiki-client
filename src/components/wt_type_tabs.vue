@@ -46,40 +46,51 @@
           class="cursor-pointer flex items-center mr-5"
           @click="setting_visible = true"
         >
-          <!-- <img :src="`/static/settings.svg`" class="w-[22px]" /> -->
           <div class="cirle bg-[#ff5f58]"></div>
-          <span class="text-[14px] ml-1">偏好设置</span>
+          <span class="text-[14px] ml-1 pt-[1px]">偏好设置</span>
         </div>
 
         <div
           class="cursor-pointer flex items-center mr-5"
-          @click="exportToSelectedMap"
+          @click="plan_visible = true"
         >
-          <!-- <img :src="`/static/local.svg`" class="w-[16px]" /> -->
           <div class="cirle bg-[#ffbc2e]"></div>
-          <span class="text-[14px] ml-1">方案管理</span>
+          <span class="text-[14px] ml-1 pt-[1px]">方案管理</span>
         </div>
         <div class="cursor-pointer flex items-center mr-5" @click="clearCache">
-          <!-- <img :src="`/static/clear_cache.svg`" class="w-[18px]" /> -->
           <div class="cirle bg-[#28c840]"></div>
-          <span class="text-[14px] ml-1">清理缓存</span>
+          <span class="text-[14px] ml-1 pt-[1px]">清理缓存</span>
+        </div>
+        <!-- <div class="cursor-pointer flex items-center mr-5">
+          <div class="cirle bg-[#349de3]"></div>
+          <span class="text-[14px] ml-1 pt-[1px]">更新日志</span>
+        </div> -->
+        <!-- <div class="cursor-pointer flex items-center mr-5" @click="openDoc">
+          <div class="cirle bg-[#ff7a22]"></div>
+          <span class="text-[14px] ml-1 pt-[1px]">完全使用手册</span>
+        </div> -->
+        <div class="cursor-pointer flex items-center mr-5" @click="openDoc">
+          <div class="cirle bg-[#ff7a22]"></div>
+          <span class="text-[14px] ml-1 pt-[1px] flex items-center">
+            <span>算法工作原理</span>
+            <svg
+              class="cir-btn__arrow mb-1 ml-1"
+              viewBox="0 0 23 23"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M7 17 17 7"></path>
+              <path d="M7 7h10v10"></path>
+            </svg>
+          </span>
         </div>
 
         <button class="cir-btn" type="button" @click="join_visible = true">
-          <span class="text-[14px]">有问题？加入群聊反馈</span>
-          <svg
-            class="cir-btn__arrow"
-            viewBox="0 0 23 23"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M7 17 17 7"></path>
-            <path d="M7 7h10v10"></path>
-          </svg>
+          <span class="text-[14px]">联系我们</span>
         </button>
 
         <!-- 底部悬浮信息栏（当前总计、切换显示研发点数、战斗权重、银狮） -->
@@ -90,15 +101,40 @@
             class="total-panel flex justify-between items-center rounded-full py-6 pl-6 h-[46px] relative"
           >
             <!-- 总计 -->
-            <div class="flex items-center">
-              <span class="text-[14px] opacity-75 mr-2">当前总计: </span>
+            <div class="flex items-center pt-1">
+              <span class="text-[14px] opacity-75 mr-2">
+                {{
+                  total_stats_mode === "pending" ? "待研发总计:" : "完整总计:"
+                }}
+              </span>
               <span class="text-[14px] mr-[2px]">{{ current_totals.rp }}</span>
               <img :src="`/static/rp.png`" width="18" />
               <span class="text-[14px] ml-1 mr-2">/</span>
               <span class="text-[14px] mr-[2px]">{{ current_totals.sp }}</span>
               <img :src="`/static/war-points.png`" width="18" />
+
+              <!-- 总计显示方式 -->
+              <Button
+                variant="ghost"
+                class="cursor-pointer rounded-full"
+                @click="toggleStatsMode"
+              >
+                <!-- pending：待研发，complete：完整 -->
+                <PhArrowsDownUp :size="20" />
+              </Button>
             </div>
-            <div class="show-mode ml-6 mr-[6px]">
+            <!-- 自动计算开线路径入口按钮 -->
+            <Button
+              variant="ghost"
+              v-if="['ground', 'aviation'].includes(vt)"
+              class="automatic_button ml-1 cursor-pointer !px-3 pt-[10px]"
+              @click="emit('automatic-calculate')"
+            >
+              <PhCrownSimple :size="20" weight="bold" />
+              <span class="pt-[2px]">自动计算</span>
+            </Button>
+            <!-- 切换点数类型 -->
+            <div class="show-mode ml-3 mr-[6px]">
               <cir_tabs
                 :modelValue="pt"
                 :options="pointsType"
@@ -119,7 +155,7 @@
     </template>
     <template #main>
       <div class="setting-banner mb-5">
-        <img :src="`/static/setting-banner-2.jpg`" class="w-[440px]" />
+        <img :src="`/static/setting-banner-2_mini.png`" class="w-[490px]" />
       </div>
 
       <!-- 个性化配置 -->
@@ -135,7 +171,7 @@
           </div>
         </div>
 
-        <div class="setting-item flex justify-between items-center mb-2">
+        <div class="setting-item flex justify-between items-center mb-1">
           <div class="label text-[15px]">全局背景图像/视频</div>
           <Select
             :modelValue="settings.bg_img"
@@ -165,7 +201,7 @@
           </Select>
         </div>
 
-        <div class="setting-item flex justify-between items-center mb-2">
+        <div class="setting-item flex justify-between items-center">
           <div class="label text-[15px]">背景模糊度</div>
           <NumberField
             :model-value="settings.blur_number"
@@ -181,7 +217,7 @@
           </NumberField>
         </div>
 
-        <div class="setting-item flex justify-between items-center mb-2">
+        <div class="setting-item flex justify-between items-center">
           <div class="label text-[15px]">科技树还原游戏UI风格</div>
           <div class="flex items-center gap-3">
             <Checkbox
@@ -195,7 +231,7 @@
           </div>
         </div>
 
-        <div class="setting-item flex justify-between items-center mb-2">
+        <div class="setting-item flex justify-between items-center">
           <div class="label text-[15px]">数学格式</div>
           <Select
             :modelValue="settings.math_format"
@@ -216,6 +252,34 @@
               </SelectGroup>
             </SelectContent>
           </Select>
+        </div>
+
+        <div class="setting-item flex justify-between items-center mb-2">
+          <div class="label text-[15px] flex items-center">
+            全局加载动画
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <PhWarningCircle :size="18" class="ml-1 opacity-60" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p class="text-[14px]">
+                    关闭加载动画后科技树切换会比较生硬、在此期间请等待数据加载完毕，避免执行其他操作
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <div class="flex items-center gap-3">
+            <Checkbox
+              id="loading_animation"
+              :modelValue="settings.loading_animation"
+              @update:model-value="
+                (val) => updateSettings('loading_animation', val)
+              "
+            />
+            <Label for="loading_animation">启用</Label>
+          </div>
         </div>
       </div>
 
@@ -241,7 +305,7 @@
                   <PhWarningCircle :size="18" class="ml-1 opacity-60" />
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p>
+                  <p class="text-[14px]">
                     勾选后，鼠标左键单击折叠载具组时会自动选择其下第一个折叠载具
                   </p>
                 </TooltipContent>
@@ -269,7 +333,9 @@
                   <PhWarningCircle :size="18" class="ml-1 opacity-60" />
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p>勾选后，全选载具时仅选中折叠载具组下的第一个折叠载具</p>
+                  <p class="text-[14px]">
+                    勾选后，全选载具时仅选中折叠载具组下的第一个折叠载具
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -285,35 +351,64 @@
             <Label for="terms-2">全选时仅首选折叠载具</Label>
           </div>
         </div>
+
+        <div class="setting-item flex justify-between items-center">
+          <div class="label text-[15px] flex">开发者模式</div>
+          <div class="flex items-center gap-3">
+            <Checkbox
+              id="developer-mode"
+              :modelValue="settings.developer_mode"
+              @update:model-value="
+                (val) => updateSettings('developer_mode', val)
+              "
+            />
+            <Label for="developer-mode">启用调试面板</Label>
+          </div>
+        </div>
       </div>
     </template>
   </public_dialog>
 
-  <!-- 加入群聊面板 -->
+  <!-- 联系我们面板 join_visible -->
   <public_dialog v-model="join_visible">
     <template #header>
-      <div class="title">扫码加入群聊</div>
+      <div class="title">联系我们</div>
     </template>
     <template #main>
-      <div class="flex items-center mb-2">
+      <div class="flex items-center mb-2 text-[14px]">
         <div class="group-item text-center">
-          <img :src="`/static/group-1.png`" class="w-[140px]" />
-          <p class="mt-4">QQ-1群</p>
+          <img :src="`/static/group-1.png`" class="w-[130px]" />
+          <p class="mt-4">QQ-交流1群</p>
         </div>
         <div class="group-item text-center mx-6">
-          <img :src="`/static/group-2.png`" class="w-[140px]" />
-          <p class="mt-4">QQ-2群</p>
+          <img :src="`/static/group-2.png`" class="w-[130px]" />
+          <p class="mt-4">QQ-交流2群</p>
         </div>
         <div class="group-item text-center">
-          <img :src="`/static/group-3.png`" class="w-[140px]" />
-          <p class="mt-4">QQ-3群</p>
+          <img :src="`/static/group-3.png`" class="w-[130px]" />
+          <p class="mt-4">QQ-交流3群</p>
         </div>
+      </div>
+
+      <div class="flex justify-center items-center mt-6 mb-2">
+        <PhWechatLogo :size="28" />
+        <span class="ml-2">loven-cruel</span>
+        <!-- https://space.bilibili.com/640676625?spm_id_from=333.337.0.0 -->
       </div>
     </template>
   </public_dialog>
+
+  <!-- 方案管理面板 -->
+  <plan_management v-model="plan_visible"></plan_management>
 </template>
 
 <script setup>
+import {
+  PhCrownSimple,
+  PhWarningCircle,
+  PhArrowsDownUp,
+  PhWechatLogo,
+} from "@phosphor-icons/vue";
 import {
   vehicle_type,
   vehicle_type_texts,
@@ -348,7 +443,7 @@ import {
   NumberFieldIncrement,
   NumberFieldInput,
 } from "@/components/ui/number-field";
-import { PhWarningCircle } from "@phosphor-icons/vue";
+import { Button } from "@/components/ui/button";
 import {
   parseNumber,
   formatChineseNumber,
@@ -360,7 +455,13 @@ const props = defineProps({
   vt: String, // 当前军种类型
   pt: String, // 点数信息显示类型（pointsType）
 });
-const emit = defineEmits(["update:vt", "update:pt", "exportToImage", "clear"]);
+const emit = defineEmits([
+  "update:vt",
+  "update:pt",
+  "exportToImage",
+  "clear",
+  "automatic-calculate",
+]);
 
 const vehicle_type_icons = {
   ground: "Medium tank",
@@ -370,29 +471,47 @@ const vehicle_type_icons = {
   boats: "Heavy boat",
 };
 const treeDataStore = useTreeDataStore();
-const { updateSettings, updateSelectedStateMapAllLocal } = treeDataStore;
+const {
+  updateSettings,
+  updateSelectedStateMapAllLocal,
+  updateOwnedVehicleIds,
+} = treeDataStore;
 const {
   settings,
-  total_stats,
+  total_stats_complete,
+  total_stats_pending,
   selected_state_map,
   tree_data,
   researchable_set,
 } = storeToRefs(treeDataStore);
 const setting_visible = ref(false);
 const join_visible = ref(false);
+const total_stats_mode = ref("pending");
+const active_total_stats = computed(() =>
+  total_stats_mode.value === "complete"
+    ? total_stats_complete.value
+    : total_stats_pending.value,
+);
 const current_totals = computed(() => {
   if (settings.value.math_format == "thousands_separator") {
     return {
-      rp: parseNumber(total_stats.value.rp, true),
-      sp: parseNumber(total_stats.value.sp, true),
+      rp: parseNumber(active_total_stats.value.rp, true),
+      sp: parseNumber(active_total_stats.value.sp, true),
     };
   } else {
     return {
-      rp: formatChineseNumber(total_stats.value.rp, true),
-      sp: formatChineseNumber(total_stats.value.sp, true),
+      rp: formatChineseNumber(active_total_stats.value.rp, true),
+      sp: formatChineseNumber(active_total_stats.value.sp, true),
     };
   }
 });
+function toggleStatsMode() {
+  if (total_stats_mode.value == "pending") {
+    total_stats_mode.value = "complete";
+  } else {
+    total_stats_mode.value = "pending";
+  }
+}
 
 const is_all_selected = computed(() => {
   const selected = selected_state_map.value;
@@ -429,6 +548,12 @@ function toggleSelectAll() {
     tree_data,
     selected_state_map,
     settings,
+    falseEffect() {
+      // 在清理owned_vehicle_ids之前，将owned_vehicle_ids缓存到本地存储（计划需求，待定）
+      // ...
+
+      updateOwnedVehicleIds([]);
+    },
   });
 }
 
@@ -440,29 +565,12 @@ function clearCache() {
   emit("clear");
 }
 
-// 导出当前选中状态
-function exportToSelectedMap() {
-  alert("敬请期待！");
-  // const export_result = {
-  //   types: { ...types.value },
-  //   selected_state_map: { ...selected_state_map.value },
-  // };
-
-  // const jsonStr = JSON.stringify(export_result, null, 2);
-
-  // const blob = new Blob([jsonStr], { type: "application/json" });
-  // const url = URL.createObjectURL(blob);
-
-  // const a = document.createElement("a");
-  // a.href = url;
-  // a.download = `${types.value.country_code}_${types.value.vehicle_type}_ssmap.json`;
-
-  // document.body.appendChild(a);
-  // a.click();
-
-  // document.body.removeChild(a);
-  // URL.revokeObjectURL(url);
+// 跳转至完全使用手册
+function openDoc() {
+  window.open("/doc", "_blank");
 }
+
+const plan_visible = ref(false);
 </script>
 
 <style scoped>
@@ -473,7 +581,11 @@ function exportToSelectedMap() {
 }
 
 .total-panel-bar {
-  bottom: 50px;
+  bottom: 40px;
+}
+
+.automatic_button {
+  border-radius: 100px;
 }
 
 .total-panel {
@@ -616,7 +728,7 @@ function exportToSelectedMap() {
   --cloud: var(--color-cloud, #ffffff);
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   height: 42px;
   padding: 0 20px 0 22px;
   border: 0;
