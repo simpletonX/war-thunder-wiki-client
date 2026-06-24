@@ -40,8 +40,9 @@
 </template>
 
 <script setup>
-const props = defineProps(["modelValue", "version"]);
+const props = defineProps(["modelValue"]);
 const emit = defineEmits(["update:modelValue"]);
+const version = import.meta.env.VITE_APP_VERSION;
 
 function close_mask() {
   emit("update:modelValue", false);

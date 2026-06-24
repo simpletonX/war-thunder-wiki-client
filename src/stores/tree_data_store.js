@@ -227,8 +227,8 @@ export const useTreeDataStore = defineStore("tree_data", () => {
   function checkAndShowUpdateNotice() {
     const cache_version = getStorage("cache_version", "");
 
-    if (String(cache_version) != window.__APP_VERSION__) {
-      setStorage("cache_version", window.__APP_VERSION__);
+    if (String(cache_version) != import.meta.env.VITE_APP_VERSION) {
+      setStorage("cache_version", import.meta.env.VITE_APP_VERSION);
       return false;
     }
     return true;

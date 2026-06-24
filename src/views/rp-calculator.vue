@@ -188,7 +188,7 @@
           </div>
           <div class="flex justify-center items-center mt-6">
             <img :src="`/favicon.ico`" class="w-[46px] h-[39px] mr-1" />
-            <span class="pt-[1px]">RP-Calculator v{{ __APP_VERSION__ }}</span>
+            <span class="pt-[1px]">RP-Calculator v{{ version }}</span>
             <div
               class="border-[1px] border-solid border-[rgba(255,255,255,0.1)] px-[10px] py-[5px] ml-2 rounded-[10px] flex items-center"
             >
@@ -284,7 +284,7 @@
   <!-- 更新公告 -->
   <update_notice
     v-model="notice_visible"
-    :version="__APP_VERSION__"
+    :version="version"
   ></update_notice>
 
   <!-- 用户协议 -->
@@ -409,9 +409,9 @@ const currentTotals = ref({});
 function handleTotals(total) {
   currentTotals.value = total;
 }
-const db_version = "2.55.1.142";
-const db_update_date = "2026-06-11";
-const __APP_VERSION__ = window.__APP_VERSION__;
+const db_version = import.meta.env.VITE_APP_DB_VERSION;
+const db_update_date = import.meta.env.VITE_APP_DB_UPDATE_DATE;
+const version = import.meta.env.VITE_APP_VERSION;
 
 const showFastAsTarget = computed(() => {
   const { item, isPremium } = fastFuncsState.value;
