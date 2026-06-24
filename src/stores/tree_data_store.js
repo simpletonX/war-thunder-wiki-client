@@ -223,6 +223,17 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     });
   }
 
+  // 判断当前是否有新的版本更新日志，弹出更新公告面板
+  function checkAndShowUpdateNotice() {
+    const cache_version = getStorage("cache_version", "");
+
+    if (String(cache_version) != window.__APP_VERSION__) {
+      setStorage("cache_version", window.__APP_VERSION__);
+      return false;
+    }
+    return true;
+  }
+
   return {
     tree_data,
     updateTreeData,
@@ -246,6 +257,7 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     loading_visible,
     loading,
     agreement_accepted,
-    updateAgreementAccepted
+    updateAgreementAccepted,
+    checkAndShowUpdateNotice,
   };
 });

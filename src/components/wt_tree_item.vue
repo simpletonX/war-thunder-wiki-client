@@ -1,8 +1,8 @@
 <template>
   <!-- .wt-tree-item_mask 为了解决stacking context问题 -->
-  <div class="wt-tree-item_mask relative">
+  <div class="wt-tree-item_mask relative mb-[30px]">
     <div
-      class="wt-tree-item w-[156px] h-[56px] mb-[30px]"
+      class="wt-tree-item w-[156px] h-[56px]"
       :class="{
         true_select_mode:
           !selected_state_map[item.data_unit_id] &&

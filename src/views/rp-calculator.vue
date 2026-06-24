@@ -34,7 +34,13 @@
     ></div>
   </div>
 
-  <div class="container-main">
+  <!-- 导出图像前，添加.screenshot-state类名 -->
+  <div
+    class="container-main"
+    :class="{
+      'screenshot-state': screenshot_state,
+    }"
+  >
     <!-- 载具军种切换tab栏 -->
     <!-- <div class="fill-placeholder h-[66px]"></div> -->
     <wt_type_tabs
@@ -43,14 +49,16 @@
       @update:vt="(val) => updateTypes('vehicle_type', val)"
       @clear="requestTreeData"
       @automatic-calculate="automatic_options_visible = true"
+      @exportImage="exportImage"
+      @update:totals="handleTotals"
     />
 
     <!-- 科技树主体 -->
-    <div class="wt-tree w-[1350px] mx-auto relative">
+    <div class="wt-tree w-[1350px] mx-auto relative" ref="wt_tree">
       <!-- 遮罩层，解决因backdrop-filter带来的包含块对fixed定位的影响 -->
       <div class="backdrop-filter"></div>
 
-      <div class="tree-area pb-[140px] pt-[22px]" v-if="tree_data?.length">
+      <div class="tree-area pb-[100px] pt-[22px]" v-if="tree_data?.length">
         <!-- 每个等级 -->
         <!-- 全局通用遮罩层 -->
         <public_mask />
@@ -146,6 +154,51 @@
             </div>
           </div>
         </div>
+
+        <div class="screenshot-core-info mt-6" v-if="screenshot_state">
+          <div class="flex justify-center">
+            <div class="total_rel flex items-center">
+              <span class="mr-1"
+                >除去已拥有载具总计：{{ currentTotals?.prp }}</span
+              >
+              <img :src="`/static/rp.png`" width="18" />
+              <span class="mr-1">&nbsp;/&nbsp;{{ currentTotals?.psp }}</span>
+              <img :src="`/static/war-points.png`" width="18" />
+            </div>
+            <div class="total_abs flex items-center ml-10">
+              <span class="mr-1">载具整体总计：{{ currentTotals?.crp }}</span>
+              <img :src="`/static/rp.png`" width="18" />
+              <span class="mr-1">&nbsp;/&nbsp;{{ currentTotals?.csp }}</span>
+              <img :src="`/static/war-points.png`" width="18" />
+            </div>
+          </div>
+          <div class="flex justify-center items-center mt-5">
+            <div
+              class="country-icon"
+              v-html="country_icons[types.country_code]"
+            ></div>
+            <span class="pt-[1px]">
+              {{ country_code_texts[types.country_code] }} ·
+              {{ vehicle_type_texts[types.vehicle_type] }}
+            </span>
+            <span class="mx-4">|</span>
+            <span>数据库版本号 {{ db_version }}</span>
+            <div class="mx-4">|</div>
+            <span>数据库更新日期 {{ db_update_date }}</span>
+          </div>
+          <div class="flex justify-center items-center mt-6">
+            <img :src="`/favicon.ico`" class="w-[46px] h-[39px] mr-1" />
+            <span class="pt-[1px]">RP-Calculator v{{ __APP_VERSION__ }}</span>
+            <div
+              class="border-[1px] border-solid border-[rgba(255,255,255,0.1)] px-[10px] py-[5px] ml-2 rounded-[10px] flex items-center"
+            >
+              <PhMagnifyingGlass :size="22" />
+              <span class="ml-2 pt-[1px] pr-1"
+                >https://blind-thunder.wiki/</span
+              >
+            </div>
+          </div>
+        </div>
       </div>
 
       <div
@@ -173,9 +226,9 @@
       href="https://warthunder.com/zh/game/changelog/current/675"
       target="_blank"
       class="ml-2 pt-[4px]"
-      >当前数据库对应的游戏版本号：2.55.1.142</a
+      >当前数据库对应的游戏版本号：{{ db_version }}</a
     >
-    <span class="ml-3 pt-[4px]">更新于2026-06-11</span>
+    <span class="ml-3 pt-[4px]">更新于 {{ db_update_date }}</span>
   </div>
 
   <!-- 恢复自动计算前的手动选择状态 -->
@@ -228,6 +281,12 @@
     @toggle-priority-mode="togglePriorityMode"
   ></automatic_options>
 
+  <!-- 更新公告 -->
+  <update_notice
+    v-model="notice_visible"
+    :version="__APP_VERSION__"
+  ></update_notice>
+
   <!-- 用户协议 -->
   <user_agreement
     @close="updateAgreementAccepted"
@@ -239,6 +298,7 @@
 import {
   computed,
   defineAsyncComponent,
+  nextTick,
   onMounted,
   onUnmounted,
   ref,
@@ -261,13 +321,24 @@ import {
   parseNumber,
   toggleSelectColumnAbove,
 } from "@/utils/treeDataUtils";
-import { unlock_quantitys, preset_wallpapers } from "@/utils/dict";
-import { getTreeDataLocal, getTreeDataJsdelivr } from "@/api/tree_data";
+import {
+  unlock_quantitys,
+  preset_wallpapers,
+  country_code_texts,
+  vehicle_type_texts,
+} from "@/utils/dict";
+import { getTreeDataLocal } from "@/api/tree_data";
 import Wt_item_details from "@/components/wt_item_details.vue";
 import public_loading from "@/components/public_loading.vue";
 import wt_tree_item_fast_funcs from "@/components/wt_tree_item_fast_funcs.vue";
-import { PhArrowCounterClockwise } from "@phosphor-icons/vue";
+import {
+  PhArrowCounterClockwise,
+  PhMagnifyingGlass,
+} from "@phosphor-icons/vue";
 import User_agreement from "@/components/user_agreement.vue";
+import { country_icons } from "@/utils/icon_svgs";
+import { toPng } from "html-to-image";
+import update_notice from "@/components/update_notice.vue";
 
 const development_debug_panel = defineAsyncComponent(
   () => import("@/components/development_debug_panel.vue"),
@@ -284,6 +355,7 @@ const {
   updateOwnedVehicleIds,
   loading,
   updateAgreementAccepted,
+  checkAndShowUpdateNotice,
 } = treeDataStore;
 const {
   tree_data,
@@ -305,6 +377,41 @@ const fastFuncsState = ref({
   colIndex: null,
   anchorRect: null,
 });
+
+const wt_tree = ref(null);
+const screenshot_state = ref(false);
+async function exportImage() {
+  if (!wt_tree.value) return;
+  loading.show();
+  screenshot_state.value = true;
+
+  await nextTick();
+  await new Promise(requestAnimationFrame);
+  await new Promise(requestAnimationFrame);
+
+  const dataUrl = await toPng(wt_tree.value, {
+    cacheBust: true,
+    backgroundColor: "#20303a",
+    pixelRatio: 2,
+    useCORS: true,
+  });
+
+  const link = document.createElement("a");
+  link.download = "card.png";
+  link.href = dataUrl;
+  link.click();
+  screenshot_state.value = false;
+
+  await nextTick();
+  loading.hide();
+}
+const currentTotals = ref({});
+function handleTotals(total) {
+  currentTotals.value = total;
+}
+const db_version = "2.55.1.142";
+const db_update_date = "2026-06-11";
+const __APP_VERSION__ = window.__APP_VERSION__;
 
 const showFastAsTarget = computed(() => {
   const { item, isPremium } = fastFuncsState.value;
@@ -595,9 +702,12 @@ function onGlobalClick() {
   closeFastFuncs();
 }
 
-const user_agreement_visible = ref(true);
-
-onMounted(async () => {
+const notice_visible = ref(false);
+onMounted(() => {
+  // 有新的未读更新公告，显示公告面板
+  if (!checkAndShowUpdateNotice()) {
+    notice_visible.value = true;
+  }
   requestTreeData();
   document.addEventListener("click", onGlobalClick);
 });
@@ -634,7 +744,11 @@ onUnmounted(() => {
   height: var(--tree_height);
   color: #fff;
 }
-.tree-area {
+.screenshot-state.container-main,
+.screenshot-state .wt-tree {
+  height: auto;
+}
+.container-main:not(.screenshot-state) .tree-area {
   height: var(--tree_height);
   overflow: auto;
   -webkit-mask-image: linear-gradient(
@@ -747,5 +861,11 @@ onUnmounted(() => {
   padding: 1px 17px 0 8px;
   height: 28px;
   position: relative;
+}
+</style>
+
+<style>
+.country-icon svg {
+  width: 40px;
 }
 </style>

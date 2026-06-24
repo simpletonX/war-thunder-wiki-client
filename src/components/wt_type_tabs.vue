@@ -50,19 +50,26 @@
           <span class="text-[14px] ml-1 pt-[1px]">偏好设置</span>
         </div>
 
-        <div
+        <!-- <div
           class="cursor-pointer flex items-center mr-5"
           @click="plan_visible = true"
         >
           <div class="cirle bg-[#ffbc2e]"></div>
           <span class="text-[14px] ml-1 pt-[1px]">方案管理</span>
-        </div>
+        </div> -->
         <div class="cursor-pointer flex items-center mr-5" @click="clearCache">
           <div class="cirle bg-[#28c840]"></div>
           <span class="text-[14px] ml-1 pt-[1px]">清理缓存</span>
         </div>
-        <!-- <div class="cursor-pointer flex items-center mr-5">
-          <div class="cirle bg-[#349de3]"></div>
+        <div class="cursor-pointer flex items-center mr-5" @click="exportImage">
+          <div class="cirle bg-[#169ccd]"></div>
+          <span class="text-[14px] ml-1 pt-[1px]">导出图像</span>
+        </div>
+        <!-- <div
+          class="cursor-pointer flex items-center mr-5"
+          @click="openUpdateLog"
+        >
+          <div class="cirle bg-[#9546f5]"></div>
           <span class="text-[14px] ml-1 pt-[1px]">更新日志</span>
         </div> -->
         <!-- <div class="cursor-pointer flex items-center mr-5" @click="openDoc">
@@ -72,8 +79,8 @@
         <div class="cursor-pointer flex items-center mr-5" @click="openDoc">
           <div class="cirle bg-[#ff7a22]"></div>
           <span class="text-[14px] ml-1 pt-[1px] flex items-center">
-            <span>算法工作原理</span>
-            <svg
+            <span>在线文档</span>
+            <!-- <svg
               class="cir-btn__arrow mb-1 ml-1"
               viewBox="0 0 23 23"
               fill="none"
@@ -85,7 +92,7 @@
             >
               <path d="M7 17 17 7"></path>
               <path d="M7 7h10v10"></path>
-            </svg>
+            </svg> -->
           </span>
         </div>
 
@@ -414,7 +421,7 @@ import {
   vehicle_type_texts,
   preset_wallpapers,
 } from "@/utils/dict";
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { storeToRefs } from "pinia";
 import public_dialog from "@/components/public_dialog.vue";
 import cir_tabs from "@/components/cir_tabs.vue";
@@ -461,7 +468,13 @@ const emit = defineEmits([
   "exportToImage",
   "clear",
   "automatic-calculate",
+  "exportImage",
+  "update:totals",
 ]);
+
+function exportImage() {
+  emit("exportImage");
+}
 
 const vehicle_type_icons = {
   ground: "Medium tank",
@@ -505,12 +518,47 @@ const current_totals = computed(() => {
     };
   }
 });
+const formatted_totals = computed(() => {
+  // 完整total
+  const complete = total_stats_complete.value;
+  // 剪除已拥有后的total
+  const pending = total_stats_pending.value;
+
+  if (settings.value.math_format === "thousands_separator") {
+    return {
+      crp: parseNumber(complete.rp, true),
+      prp: parseNumber(pending.rp, true),
+      csp: parseNumber(complete.sp, true),
+      psp: parseNumber(pending.sp, true),
+    };
+  } else {
+    return {
+      crp: formatChineseNumber(complete.rp, true),
+      prp: formatChineseNumber(pending.rp, true),
+      csp: formatChineseNumber(complete.sp, true),
+      psp: formatChineseNumber(pending.sp, true),
+    };
+  }
+});
+watch(
+  formatted_totals,
+  (val) => {
+    emit("update:totals", val);
+  },
+  { immediate: true, deep: true },
+);
+
 function toggleStatsMode() {
   if (total_stats_mode.value == "pending") {
     total_stats_mode.value = "complete";
   } else {
     total_stats_mode.value = "pending";
   }
+}
+
+const update_log_visible = ref(true);
+function openUpdateLog() {
+  update_log_visible.value = true;
 }
 
 const is_all_selected = computed(() => {
@@ -568,7 +616,10 @@ function clearCache() {
 // 跳转至算法工作原理
 function openDoc() {
   // window.open("https://blind-thunder.wiki/#/doc", "_blank");
-  window.open("https://icnv6yvo8yvw.feishu.cn/docx/TBKFd623mowK9pxwGj5cwiRenwh?from=from_copylink", "_blank");
+  window.open(
+    "https://icnv6yvo8yvw.feishu.cn/docx/TBKFd623mowK9pxwGj5cwiRenwh?from=from_copylink",
+    "_blank",
+  );
 }
 
 const plan_visible = ref(false);
