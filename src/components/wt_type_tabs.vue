@@ -565,9 +565,10 @@ function clearCache() {
   emit("clear");
 }
 
-// 跳转至完全使用手册
+// 跳转至算法工作原理
 function openDoc() {
-  window.open("/doc", "_blank");
+  // window.open("https://blind-thunder.wiki/#/doc", "_blank");
+  window.open("https://icnv6yvo8yvw.feishu.cn/docx/TBKFd623mowK9pxwGj5cwiRenwh?from=from_copylink", "_blank");
 }
 
 const plan_visible = ref(false);

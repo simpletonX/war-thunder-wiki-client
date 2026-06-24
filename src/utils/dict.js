@@ -441,7 +441,7 @@ export const unlock_quantitys = {
       IV: 6,
       V: 5,
       VI: 5,
-      VII: 4,
+      VII: 5,
       VIII: 0,
     },
     aviation: {

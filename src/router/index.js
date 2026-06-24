@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from "vue-router";
+import { createRouter, createWebHashHistory } from "vue-router";
 
 const routes = [
   {
@@ -10,15 +10,10 @@ const routes = [
     name: "rp-calculator",
     component: () => import("@/views/rp-calculator.vue"),
   },
-  {
-    path: "/doc",
-    name: "doc",
-    component: () => import("@/views/doc/index.vue"),
-  },
 ];
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes,
 });
 

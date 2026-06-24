@@ -262,7 +262,7 @@ import {
   toggleSelectColumnAbove,
 } from "@/utils/treeDataUtils";
 import { unlock_quantitys, preset_wallpapers } from "@/utils/dict";
-import { getTreeDataLocal } from "@/api/tree_data";
+import { getTreeDataLocal, getTreeDataJsdelivr } from "@/api/tree_data";
 import Wt_item_details from "@/components/wt_item_details.vue";
 import public_loading from "@/components/public_loading.vue";
 import wt_tree_item_fast_funcs from "@/components/wt_tree_item_fast_funcs.vue";
