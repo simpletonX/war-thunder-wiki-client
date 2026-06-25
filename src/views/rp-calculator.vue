@@ -751,6 +751,8 @@ onUnmounted(() => {
 .container-main:not(.screenshot-state) .tree-area {
   height: var(--tree_height);
   overflow: auto;
+  transform: none;
+  will-change: auto;
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0%,

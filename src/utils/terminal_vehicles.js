@@ -257,7 +257,7 @@ export const terminal_vehicles = {
       jp_type_95_ha_go: true,
       jp_type_2_ka_mi: true,
       jp_type_2_ho_i: true,
-      jp_hiro_sha: true,
+      jp_type_2_ho_ni_2: true,
       jp_type_98_ta_se: true,
     },
     aviation: {

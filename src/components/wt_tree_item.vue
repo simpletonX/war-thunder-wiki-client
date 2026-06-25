@@ -68,10 +68,13 @@
           class="war-points-number absolute right-[2px] bottom-[4px] flex items-center"
           v-if="currentPointsType == 1 && isDefault"
         >
-          <span class="text-[12px] mr-[1px] pt-[2px]">{{
-            item.items
-              ? item.items[0].rp_view || "初始"
-              : item.rp_view || "初始"
+          <span
+            class="text-[12px] mr-[1px] pt-[2px]"
+            v-if="item.type == 'single'"
+            >{{ item.rp_view || "初始" }}</span
+          >
+          <span class="text-[12px] mr-[1px] pt-[2px]" v-else>{{
+            total_selected_items_stats?.rp_view || "初始"
           }}</span>
           <img :src="`/static/rp.png`" class="w-[16px]" />
         </div>
@@ -80,10 +83,13 @@
           class="war-points-number absolute right-[3px] bottom-[4px] flex items-center"
           v-if="currentPointsType == 2 && isDefault"
         >
-          <span class="text-[12px] mr-[1px] pt-[2px]">{{
-            item.items
-              ? item.items[0].sp_view || "初始"
-              : item.sp_view || "初始"
+          <span
+            class="text-[12px] mr-[1px] pt-[2px]"
+            v-if="item.type == 'single'"
+            >{{ item.sp_view || "初始" }}</span
+          >
+          <span class="text-[12px] mr-[1px] pt-[2px]" v-else>{{
+            total_selected_items_stats?.sp_view || "初始"
           }}</span>
           <img :src="`/static/war-points.png`" class="w-[18px]" />
         </div>
@@ -103,6 +109,11 @@
 
         <!-- 自动规划基线中已拥有载具的额外标识 -->
         <div class="owned_mark" v-if="!isPremium">已拥有</div>
+      </div>
+
+      <!-- 向下垂至展示所有选中的sub-item -->
+      <div class="select_items" v-if="current_select_items?.length">
+        已选 {{ current_select_items.length }}
       </div>
 
       <!-- 直升机指向箭头 -->
@@ -323,6 +334,7 @@ import { useTreeDataStore } from "@/stores/tree_data_store";
 import { PhArrowFatLineUp } from "@phosphor-icons/vue";
 import { terminal_vehicles } from "@/utils/terminal_vehicles";
 import { main_role_icons } from "@/utils/icon_svgs";
+import { parseNumber } from "@/utils/treeDataUtils";
 
 const props = defineProps({
   // 当前载具对象
@@ -375,6 +387,49 @@ function isItemSelected(item) {
 
   return false;
 }
+// 获取当前选中的二级折叠载具
+const current_select_items = ref([]);
+watch(
+  selected_state_map,
+  () => {
+    if (props.item.type == "single") {
+      return [];
+    } else {
+      const items = props.item?.items || [];
+      current_select_items.value = items.filter(
+        (item) => selected_state_map.value[item.data_unit_id],
+      );
+    }
+  },
+  {
+    immediate: true,
+    deep: true,
+  },
+);
+const total_selected_items_stats = computed(() => {
+  if (props.item.type == "single") {
+    return {};
+  }
+  const items = current_select_items.value || [];
+  const result = items.reduce(
+    (acc, item) => {
+      acc.rp += Number(item.rp || 0);
+      acc.sp += Number(item.sp || 0);
+      return acc;
+    },
+    { rp: 0, sp: 0 },
+  );
+  if (!result.rp) {
+    result.rp = props.item.items[0].rp;
+  }
+  if (!result.sp) {
+    result.sp = props.item.items[0].sp;
+  }
+  result.rp_view = parseNumber(result.rp, true);
+  result.sp_view = parseNumber(result.sp, true);
+  return result;
+});
+
 // 点击item时更新选中状态策略
 function clickTrigger(item) {
   if (item.type == "multiple") {
@@ -444,6 +499,10 @@ watch(
 // 将右键目标及其窗口坐标交给 App.vue 中唯一的快捷功能栏。
 function openFastFuncs(event, target_item) {
   if (target_item.type == "multiple") {
+    // 右键折叠载具时表示直接进入该折叠目录（等效于单击左键）
+    public_mask.setOpacity(0.65);
+    public_mask.show();
+    showStatus.value = !showStatus.value;
     return;
   }
 
@@ -471,6 +530,15 @@ function openFastFuncs(event, target_item) {
 </style>
 
 <style scoped>
+.select_items {
+  position: absolute;
+  bottom: -20px;
+  left: 0;
+  line-height: 20px;
+  font-size: 12px;
+  background-color: #242e37;
+  padding: 0 5px;
+}
 .main_role {
   position: absolute;
   bottom: 6px;

@@ -137,7 +137,7 @@
               class="automatic_button ml-1 cursor-pointer !px-3 pt-[10px]"
               @click="emit('automatic-calculate')"
             >
-              <PhCrownSimple :size="20" weight="bold" />
+              <PhInfinity :size="20" weight="bold" />
               <span class="pt-[2px]">自动计算</span>
             </Button>
             <!-- 切换点数类型 -->
@@ -411,7 +411,7 @@
 
 <script setup>
 import {
-  PhCrownSimple,
+  PhInfinity,
   PhWarningCircle,
   PhArrowsDownUp,
   PhWechatLogo,
