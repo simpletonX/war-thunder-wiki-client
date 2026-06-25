@@ -702,7 +702,7 @@ function onGlobalClick() {
   closeFastFuncs();
 }
 
-const notice_visible = ref(false);
+const notice_visible = ref(true);
 onMounted(() => {
   // 有新的未读更新公告，显示公告面板
   if (!checkAndShowUpdateNotice()) {
