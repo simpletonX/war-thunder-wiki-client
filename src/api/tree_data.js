@@ -63,7 +63,7 @@ export async function getTreeDataLocal({ country_code, vehicle_type }) {
     const res = await request.get(url);
     return res;
   } catch (err) {
-    alert("科技树数据请求失败");
+    alert("科技树数据获取失败: " + (err?.message || "未知错误"));
     throw err;
   }
 }

@@ -35,6 +35,7 @@
   </div>
 
   <!-- 导出图像前，添加.screenshot-state类名 -->
+  <!-- 主体 -->
   <div
     class="container-main"
     :class="{
@@ -51,6 +52,7 @@
       @automatic-calculate="automatic_options_visible = true"
       @exportImage="exportImage"
       @update:totals="handleTotals"
+      @openUpdateLog="() => (notice_visible = true)"
     />
 
     <!-- 科技树主体 -->
@@ -206,7 +208,7 @@
         v-else
       >
         <img :src="`/static/unlink.svg`" class="w-[18px] mr-2" />
-        <span class="opacity-50 mt-1">该类型科技树暂无数据</span>
+        <span class="opacity-50 mt-1">科技树数据获取异常</span>
       </div>
 
       <!-- 国家切换tab栏 -->
@@ -215,6 +217,13 @@
         @update:modelValue="(val) => updateTypes('country_code', val)"
       />
     </div>
+  </div>
+
+  <!-- 左上角版本号 -->
+  <div
+    class="public_version fixed left-[20px] top-[15px] text-[14px] text-[rgba(255,255,255,0.6)]"
+  >
+    RP-Calculator v{{ version }}
   </div>
 
   <!-- 当前数据库更新时间与版本号 -->
@@ -245,10 +254,11 @@
   </button>
 
   <!-- 全局加载动画 -->
-  <public_loading
+  <!-- <public_loading
     :modelValue="loading_visible"
     v-if="settings.loading_animation"
-  />
+  /> -->
+  <public_loading :modelValue="loading_visible" />
 
   <!-- 全局唯一的载具快捷功能栏 -->
   <wt_tree_item_fast_funcs
@@ -275,17 +285,12 @@
     v-model:priorityList="priorityList"
     v-model:ignore_multiple="ignore_multiple"
     :priorityVehicleList="priorityVehicleList"
-    :priority_mode="priority_mode"
     :ignoreColumns="ignoreColumns"
     @automatic-calculate="runAutomaticPlanning"
-    @toggle-priority-mode="togglePriorityMode"
   ></automatic_options>
 
   <!-- 更新公告 -->
-  <update_notice
-    v-model="notice_visible"
-    :version="version"
-  ></update_notice>
+  <update_notice v-model="notice_visible" :version="version"></update_notice>
 
   <!-- 用户协议 -->
   <user_agreement
@@ -310,8 +315,10 @@ import wt_country_tabs from "@/components/wt_country_tabs.vue";
 import wt_type_tabs from "@/components/wt_type_tabs.vue";
 import public_mask from "@/components/public_mask.vue";
 import { useTreeDataStore } from "@/stores/tree_data_store";
+import { getStorage, setStorage } from "@/utils/storage";
 import { storeToRefs } from "pinia";
 import {
+  cleanHiddenVehiclesFromTreeData,
   createArrowPointsMap,
   createResearchableSet,
   createVehicleCostMap,
@@ -322,11 +329,12 @@ import {
   toggleSelectColumnAbove,
 } from "@/utils/treeDataUtils";
 import {
-  unlock_quantitys,
   preset_wallpapers,
   country_code_texts,
   vehicle_type_texts,
+  ignore_tree_data,
 } from "@/utils/dict";
+import { unlock_quantitys } from "@/utils/unlock_quantitys";
 import { getTreeDataLocal } from "@/api/tree_data";
 import Wt_item_details from "@/components/wt_item_details.vue";
 import public_loading from "@/components/public_loading.vue";
@@ -356,6 +364,7 @@ const {
   loading,
   updateAgreementAccepted,
   checkAndShowUpdateNotice,
+  clearAllSSMap,
 } = treeDataStore;
 const {
   tree_data,
@@ -380,30 +389,97 @@ const fastFuncsState = ref({
 
 const wt_tree = ref(null);
 const screenshot_state = ref(false);
+const exportImagePixelRatios = {
+  standard: 1,
+  high: 1.5,
+  ultra: 2,
+};
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForImageReady(img) {
+  if (!img) return;
+
+  if (!img.currentSrc && img.dataset?.src && !img.src) {
+    img.src = img.dataset.src;
+  }
+
+  if (!img.complete) {
+    await new Promise((resolve) => {
+      img.addEventListener("load", resolve, { once: true });
+      img.addEventListener("error", resolve, { once: true });
+    });
+  }
+
+  if (typeof img.decode === "function" && img.complete) {
+    await img.decode().catch(() => {});
+  }
+}
+
+async function prepareImagesForExport(root) {
+  const images = [...root.querySelectorAll("img")].filter(
+    (img) => !img.closest(".folding-vehicle"),
+  );
+  const lazyImages = [];
+
+  for (const img of images) {
+    if (img.getAttribute("loading") === "lazy") {
+      lazyImages.push(img);
+      img.setAttribute("data-export-original-loading", "lazy");
+      img.loading = "eager";
+      img.setAttribute("loading", "eager");
+    }
+  }
+
+  await nextTick();
+  await Promise.all(images.map((img) => waitForImageReady(img)));
+  await delay(450);
+
+  return () => {
+    for (const img of lazyImages) {
+      img.loading = "lazy";
+      img.setAttribute("loading", "lazy");
+      img.removeAttribute("data-export-original-loading");
+    }
+  };
+}
+
 async function exportImage() {
   if (!wt_tree.value) return;
   loading.show();
   screenshot_state.value = true;
 
-  await nextTick();
-  await new Promise(requestAnimationFrame);
-  await new Promise(requestAnimationFrame);
+  let restoreImages = () => {};
 
-  const dataUrl = await toPng(wt_tree.value, {
-    cacheBust: true,
-    backgroundColor: "#20303a",
-    pixelRatio: 2,
-    useCORS: true,
-  });
+  try {
+    await nextTick();
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    restoreImages = await prepareImagesForExport(wt_tree.value);
 
-  const link = document.createElement("a");
-  link.download = "card.png";
-  link.href = dataUrl;
-  link.click();
-  screenshot_state.value = false;
+    const pixelRatio =
+      exportImagePixelRatios[settings.value.export_image_quality] ?? 1.5;
 
-  await nextTick();
-  loading.hide();
+    const dataUrl = await toPng(wt_tree.value, {
+      cacheBust: true,
+      backgroundColor: "#20303a",
+      pixelRatio,
+      useCORS: true,
+    });
+
+    const link = document.createElement("a");
+    link.download = "card.png";
+    link.href = dataUrl;
+    link.click();
+  } finally {
+    restoreImages();
+    screenshot_state.value = false;
+
+    await nextTick();
+    loading.hide();
+  }
 }
 const currentTotals = ref({});
 function handleTotals(total) {
@@ -532,7 +608,6 @@ function collectSelectedPlanningVehicles() {
 const automatic_options_visible = ref(false);
 const priorityVehicleList = ref([]);
 const priorityList = ref([]);
-const priority_mode = ref("hard");
 const ignore_multiple = ref(false);
 const automaticPlanningSnapshot = ref(null);
 const ignoreColumns = computed(() => {
@@ -563,10 +638,6 @@ watch(ignoreColumns, (columns) => {
   }
 });
 
-function togglePriorityMode(_priority_mode) {
-  priority_mode.value = _priority_mode;
-}
-
 // 调用一键规划算法
 async function runAutomaticPlanning() {
   const selected = selected_state_map.value || {};
@@ -588,7 +659,6 @@ async function runAutomaticPlanning() {
     priority_column: toRaw(priorityList.value).filter(
       (columnIndex) => !ignoreColumns.value.includes(columnIndex),
     ),
-    priority_mode: priority_mode.value,
     ignore_multiple: ignore_multiple.value,
   };
   const snapshot = {
@@ -654,35 +724,98 @@ function createArrowPoints(tree_data) {
   arrow_points_map.value = createArrowPointsMap(tree_data);
 }
 
+let treeDataRequestId = 0;
+function getTreeKey({ country_code, vehicle_type }) {
+  return `${country_code}_${vehicle_type}`;
+}
+
+function isCurrentTreeRequest(requestId, requestedTypes) {
+  return (
+    requestId === treeDataRequestId &&
+    types.value.country_code === requestedTypes.country_code &&
+    types.value.vehicle_type === requestedTypes.vehicle_type
+  );
+}
+
+function clearTreeDataRuntimeState(treeKey) {
+  updateTreeData([], treeKey);
+  updateResearchableSet(new Set());
+  updateVehicleCostMap({});
+  arrow_points_map.value = {};
+  priorityVehicleList.value = [];
+}
+
 /** 请求tree_data数据 */
 async function requestTreeData() {
-  automaticPlanningSnapshot.value = null;
-  loading.show();
-  // const res = await getTreeDataJsdelivr(types.value);
-  const res = await getTreeDataLocal(types.value);
-
-  loading.hide((hide_callback) => {
-    targetVehicleIds.value = new Set();
-    // 更新tree_data到store
-    updateTreeData(res);
-    // 创建Researchable集合
-    updateResearchableSet(createResearchableSet(res));
-    // 创建指向箭头元数据映射（直升机除外）
-    if (types.value.vehicle_type == "helicopters") {
-      arrow_points_map.value = {};
-    } else {
-      createArrowPoints(res);
+  // 遇到不存在的科技树，直接切换到陆军
+  if (ignore_tree_data?.[types.value.country_code]) {
+    if (
+      ignore_tree_data?.[types.value.country_code]?.[types.value.vehicle_type]
+    ) {
+      updateTypes("vehicle_type", "ground");
+      return;
     }
-    // 创建RP/SP元数据映射
-    updateVehicleCostMap(createVehicleCostMap(res));
-    // 提取顶端/末端载具（priorityVehicleList）
-    priorityVehicleList.value = getColumnBoundaryVehicles(res);
-    hide_callback && hide_callback();
-  });
+  }
+
+  const requestId = ++treeDataRequestId;
+  const requestedTypes = {
+    country_code: types.value.country_code,
+    vehicle_type: types.value.vehicle_type,
+  };
+  const requestedTreeKey = getTreeKey(requestedTypes);
+
+  // 清除列偏好数据
+  priorityList.value = [];
+
+  automaticPlanningSnapshot.value = null;
+  targetVehicleIds.value = new Set();
+  closeFastFuncs();
+  clearTreeDataRuntimeState(requestedTreeKey);
+  loading.show();
+
+  try {
+    // const res = await getTreeDataJsdelivr(requestedTypes);
+    const res = await getTreeDataLocal(requestedTypes);
+    if (!isCurrentTreeRequest(requestId, requestedTypes)) return;
+
+    const cleanedTreeData = cleanHiddenVehiclesFromTreeData(res);
+
+    loading.hide(async (hide_callback) => {
+      if (!isCurrentTreeRequest(requestId, requestedTypes)) return;
+
+      // 更新tree_data到store
+      updateTreeData(cleanedTreeData, requestedTreeKey);
+      // 创建Researchable集合
+      updateResearchableSet(createResearchableSet(cleanedTreeData));
+      // 创建指向箭头元数据映射（直升机除外）
+      if (requestedTypes.vehicle_type == "helicopters") {
+        arrow_points_map.value = {};
+      } else {
+        createArrowPoints(cleanedTreeData);
+      }
+      // 创建RP/SP元数据映射
+      updateVehicleCostMap(createVehicleCostMap(cleanedTreeData));
+      // 提取顶端/末端载具（priorityVehicleList）
+      priorityVehicleList.value = getColumnBoundaryVehicles(cleanedTreeData);
+
+      hide_callback && hide_callback();
+    });
+  } catch (error) {
+    if (!isCurrentTreeRequest(requestId, requestedTypes)) return;
+
+    clearTreeDataRuntimeState(requestedTreeKey);
+    loading.hide();
+  }
 }
 
 /** 切换currentCountry/currentVehicleType时进行requestTreeData，更新当前tree_data */
 watch(types, () => requestTreeData(), { deep: true });
+
+/** 切换隐藏载具显示设置时重新加载并清洗当前tree_data */
+watch(
+  () => settings.value.hidden_vehicle_visible,
+  () => requestTreeData(),
+);
 
 // 动态获取当前国家_军种的unlock_quantity
 const current_uq = computed(
@@ -702,8 +835,17 @@ function onGlobalClick() {
   closeFastFuncs();
 }
 
-const notice_visible = ref(true);
+const notice_visible = ref(false);
 onMounted(() => {
+  // v3.20版本是否已执行一次强制清理缓存标记
+  const v3_20_cache_clear = getStorage("v3_20_cache_clear");
+  if (!v3_20_cache_clear?.ok) {
+    clearAllSSMap();
+    setStorage("v3_20_cache_clear", {
+      ok: true,
+    });
+  }
+
   // 有新的未读更新公告，显示公告面板
   if (!checkAndShowUpdateNotice()) {
     notice_visible.value = true;

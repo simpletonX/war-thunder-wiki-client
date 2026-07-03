@@ -1,4 +1,4 @@
-import { ref, watch, shallowRef, computed } from "vue";
+import { ref, watch, shallowRef, computed, reactive } from "vue";
 import { defineStore } from "pinia";
 import { getStorage, setStorage } from "@/utils/storage";
 import { country_code as cc, vehicle_type as vt } from "@/utils/dict";
@@ -31,12 +31,18 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     all_select_mode: false,
     // 启用真实科技树模拟
     true_tree_mode: true,
-    // 数学格式
-    math_format: "thousands_separator",
+    // 数学格式 thousands_separator / Chinese_number_unit_system
+    math_format: "Chinese_number_unit_system",
     // 是否开启开发调试面板
     developer_mode: false,
     // 是否启用全局加载动画
     loading_animation: true,
+    // 导出图像质量 standard / high / ultra
+    export_image_quality: "high",
+    // 载具名称显示类型（中文简体[默认]、中文繁体、英文）
+    vehicle_title_type: "chinese_title",
+    // 是否启用隐藏的银币载具
+    hidden_vehicle_visible: false,
   };
   const settings_raw = getStorage("settings", {});
   const settings = ref({
@@ -48,14 +54,33 @@ export const useTreeDataStore = defineStore("tree_data", () => {
   function updateSettings(key, value) {
     settings.value[key] = value;
     setStorage("settings", settings.value);
+
+    // 切换hidden_vehicle_visible选项时，强制执行一次clearAllSSMap
+    if (key == "hidden_vehicle_visible") {
+      clearAllSSMap();
+    }
   }
 
   // tree_data无需写入本地存储，直接从cdn或本地json文件请求
   const tree_data = shallowRef({});
+  const tree_data_key = shallowRef("");
+
+  function getCurrentTreeKey() {
+    return `${types.value.country_code}_${types.value.vehicle_type}`;
+  }
+
+  function isCurrentTreeDataReady() {
+    return (
+      tree_data_key.value === getCurrentTreeKey() &&
+      Array.isArray(tree_data.value) &&
+      tree_data.value.length > 0
+    );
+  }
 
   // 更新tree_data
-  function updateTreeData(value) {
+  function updateTreeData(value, treeKey = getCurrentTreeKey()) {
     tree_data.value = value;
+    tree_data_key.value = treeKey;
   }
 
   // tree_data的item选中状态镜像/HashMap映射
@@ -82,6 +107,8 @@ export const useTreeDataStore = defineStore("tree_data", () => {
 
   // 更新单个item选中状态
   function updateSelectedStateMap(data_unit_id) {
+    if (!isCurrentTreeDataReady()) return;
+
     if (selected_state_map.value[data_unit_id]) {
       delete selected_state_map.value[data_unit_id];
     } else {
@@ -95,6 +122,14 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     value = selected_state_map.value,
     updateState = false,
   ) {
+    if (!isCurrentTreeDataReady()) {
+      selected_state_map.value = getStorage(
+        `${types.value.country_code}_${types.value.vehicle_type}_ssmap`,
+        {},
+      );
+      return;
+    }
+
     setStorage(
       `${types.value.country_code}_${types.value.vehicle_type}_ssmap`,
       value,
@@ -102,6 +137,46 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     if (updateState) {
       selected_state_map.value = value;
     }
+  }
+
+  // 清理所有国家/军种的本地选中态缓存
+  function clearAllSSMap() {
+    const cleared = {};
+    const knownKeys = new Set();
+    const parseStoredSSMap = (value) => {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    };
+
+    for (const countryCode of cc) {
+      for (const vehicleType of vt) {
+        knownKeys.add(`${countryCode}_${vehicleType}_ssmap`);
+      }
+    }
+
+    if (typeof localStorage !== "undefined") {
+      for (const key of knownKeys) {
+        const value = localStorage.getItem(key);
+        if (value !== null) {
+          cleared[key] = parseStoredSSMap(value);
+          localStorage.removeItem(key);
+        }
+      }
+
+      for (let index = localStorage.length - 1; index >= 0; index--) {
+        const key = localStorage.key(index);
+        if (!key?.endsWith("_ssmap") || knownKeys.has(key)) continue;
+
+        cleared[key] = parseStoredSSMap(localStorage.getItem(key));
+        localStorage.removeItem(key);
+      }
+    }
+
+    selected_state_map.value = {};
+    return cleared;
   }
 
   // RP/SP元数据映射
@@ -171,7 +246,7 @@ export const useTreeDataStore = defineStore("tree_data", () => {
   let show_time = 0;
   let hide_timer = null;
 
-  const MIN_DURATION = 1100;
+  const MIN_DURATION = 500;
 
   const loading = {
     show() {
@@ -226,6 +301,7 @@ export const useTreeDataStore = defineStore("tree_data", () => {
   // 判断当前是否有新的版本更新日志，弹出更新公告面板
   function checkAndShowUpdateNotice() {
     const cache_version = getStorage("cache_version", "");
+    console.log(cache_version);
 
     if (String(cache_version) != import.meta.env.VITE_APP_VERSION) {
       setStorage("cache_version", import.meta.env.VITE_APP_VERSION);
@@ -236,6 +312,7 @@ export const useTreeDataStore = defineStore("tree_data", () => {
 
   return {
     tree_data,
+    tree_data_key,
     updateTreeData,
     settings,
     updateSettings,
@@ -244,6 +321,7 @@ export const useTreeDataStore = defineStore("tree_data", () => {
     selected_state_map,
     updateSelectedStateMap,
     updateSelectedStateMapAllLocal,
+    clearAllSSMap,
     vehicle_cost_map,
     updateVehicleCostMap,
     owned_vehicle_ids,

@@ -7,7 +7,7 @@
     }"
     @click="close_mask"
   >
-    <div class="public_dialog_container" @click.stop>
+    <div class="public_dialog_container relative" @click.stop>
       <div class="public_dialog_header">
         <slot name="header"></slot>
       </div>

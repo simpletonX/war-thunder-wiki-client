@@ -1,6 +1,6 @@
 import { useTreeDataStore } from "@/stores/tree_data_store";
 import { storeToRefs } from "pinia";
-import { unlock_quantitys } from "@/utils/dict";
+import { unlock_quantitys } from "@/utils/unlock_quantitys";
 import { terminal_vehicles } from "@/utils/terminal_vehicles";
 import { planShortestResearchPath } from "@/utils/researchPathPlanner";
 
@@ -560,8 +560,7 @@ export function getColumnBoundaryVehicles(tree_data) {
 
         // 部分折叠组的末项没有有效 BR，不能作为列末端展示载具。
         // 此时回退到该折叠组的第一个载具。
-        lastFound =
-          lastSubItem?.br == null ? item.items?.[0] : lastSubItem;
+        lastFound = lastSubItem?.br == null ? item.items?.[0] : lastSubItem;
       }
 
       if (lastFound) break;
@@ -575,6 +574,76 @@ export function getColumnBoundaryVehicles(tree_data) {
   }
 
   return result;
+}
+
+// 判断一个银币载具是否为隐藏载具
+export function checkItemPurchaseVisible(item, isPremium) {
+  if (!item) return false;
+
+  const isLauncher = item.data_unit_id?.endsWith("_launcher");
+  const isSPAA = item.main_role === "SPAA";
+  const isNotPurchased = item.purchase === -1;
+  const isEmptyBR = item.br === "";
+
+  // 第一条件：特殊排除分体防空的分体导弹车（非隐藏载具）
+  if (isLauncher && isSPAA && isNotPurchased && isEmptyBR) {
+    return false;
+  }
+
+  // 第二条件：非高级载具，且purchase为-1，即为隐藏载具
+  let selfVisible = isNotPurchased && isPremium === false;
+
+  // 子项递归判断
+  let childrenVisible = false;
+
+  if (Array.isArray(item.items) && item.items.length > 0) {
+    childrenVisible = item.items.some((child) =>
+      checkItemPurchaseVisible(child, isPremium),
+    );
+  }
+
+  // 只要自己或子项满足，就返回 true
+  return selfVisible || childrenVisible;
+}
+
+// 基于settings.hidden_vehicle_visible，对tree_data进行隐藏银币载具数据清洗
+export function cleanHiddenVehiclesFromTreeData(tree_data) {
+  const treeDataStore = useTreeDataStore();
+  const { settings } = storeToRefs(treeDataStore);
+
+  if (settings.value.hidden_vehicle_visible !== false) {
+    return tree_data;
+  }
+
+  const cleanResearchableItem = (item) => {
+    if (!item) return null;
+
+    if (item.type === "multiple" && Array.isArray(item.items)) {
+      const visibleItems = item.items.filter(
+        (child) => !checkItemPurchaseVisible(child, false),
+      );
+
+      if (visibleItems.length === 0) return null;
+      if (visibleItems.length === 1) return visibleItems[0];
+
+      return {
+        ...item,
+        items: visibleItems,
+      };
+    }
+
+    return checkItemPurchaseVisible(item, false) ? null : item;
+  };
+
+  return (Array.isArray(tree_data) ? tree_data : []).map((rankBlock) => ({
+    ...rankBlock,
+    researchable_vehicles: (rankBlock.researchable_vehicles || []).map(
+      (column) =>
+        (column || [])
+          .map((item) => cleanResearchableItem(item))
+          .filter(Boolean),
+    ),
+  }));
 }
 
 /** researchPathPlanner/Path Worker相关 */
@@ -711,7 +780,6 @@ export function findShortestPathToVehicle({
   planned_prems = [],
   owned_researchables = [],
   priority_column = [],
-  priority_mode = "soft",
   ignore_multiple = false,
 } = {}) {
   const treeDataStore = useTreeDataStore();
@@ -745,7 +813,6 @@ export function findShortestPathToVehicle({
     countryCode: types.value.country_code,
     vehicleType: types.value.vehicle_type,
     priorityColumns: priority_column,
-    priorityMode: priority_mode,
     ignoreMultiple: ignore_multiple,
   });
 
@@ -762,7 +829,6 @@ export async function findShortestPathToVehicleWorker({
   planned_prems = [],
   owned_researchables = [],
   priority_column = [],
-  priority_mode = "soft",
   ignore_multiple = false,
 } = {}) {
   const treeDataStore = useTreeDataStore();
@@ -791,7 +857,6 @@ export async function findShortestPathToVehicleWorker({
       planned_prems,
       owned_researchables,
       priority_column,
-      priority_mode,
       ignore_multiple,
     });
   }
@@ -814,7 +879,6 @@ export async function findShortestPathToVehicleWorker({
         countryCode: types.value.country_code,
         vehicleType: types.value.vehicle_type,
         priorityColumns: priority_column,
-        priorityMode: priority_mode,
         ignoreMultiple: ignore_multiple,
       },
     });

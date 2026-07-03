@@ -8,8 +8,12 @@
       <div class="title">可选列偏好</div>
     </template>
     <template #main>
-      <div class="min-w-[460px]">
-        <div class="priority_vehicle_list flex justify-center mt-4">
+      <div class="min-w-[460px] max-w-[720px]">
+        <div class="text text-[14px] leading-[28px]">
+          ⚠️
+          算法目前虽然绝大多数时候的计算结果都是正确的，但并非100%的完全替代方案，潜在问题需要用户在使用过程中审查并及时向开发者反馈，您的每一次反馈都将使算法变得更加可靠、稳定！
+        </div>
+        <div class="priority_vehicle_list flex justify-center mt-10">
           <priority_selector
             v-model="_priorityList"
             :count="priorityVehicleList"
@@ -51,14 +55,6 @@
           <div class="flex items-center">
             <div class="flex justify-center items-start">
               <Checkbox
-                id="terms-1"
-                :modelValue="hard_mode"
-                @update:modelValue="toggle_mode"
-              />
-              <Label for="terms-1" class="ml-2 pt-[1px]">强制执行列偏好</Label>
-            </div>
-            <div class="flex justify-center items-start ml-6">
-              <Checkbox
                 id="terms-2"
                 :modelValue="ignore_multiple"
                 @update:modelValue="toggle_ignore_multiple"
@@ -66,9 +62,10 @@
               <Label for="terms-2" class="ml-2 pt-[1px]">绕开折叠载具</Label>
             </div>
           </div>
-          <Button class="cursor-pointer" @click="automatic_calculate"
-            >一键计算</Button
-          >
+          <Button class="cir-btn" @click="automatic_calculate">
+            <PhGitBranch :size="20" />
+            <span class="mr-1">开始规划路线</span>
+          </Button>
         </div>
       </div>
     </template>
@@ -76,16 +73,16 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import priority_selector from "@/components/priority_selector.vue";
 import { main_role_icons } from "@/utils/icon_svgs";
+import { PhGitBranch } from "@phosphor-icons/vue";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   priorityList: { type: Array, default: () => [] },
   priorityVehicleList: { type: Array, default: () => [] },
   ignoreColumns: { type: Array, default: () => [] },
-  priority_mode: { type: String, default: "hard" },
   ignore_multiple: { type: Boolean, default: true },
 });
 
@@ -93,7 +90,6 @@ const emit = defineEmits([
   "update:modelValue",
   "update:priorityList",
   "automatic-calculate",
-  "toggle-priority-mode",
   "update:ignore_multiple",
 ]);
 
@@ -102,17 +98,6 @@ const _priorityList = computed({
   set: (value) => emit("update:priorityList", value),
 });
 
-const hard_mode = ref(props.priority_mode == "hard" ? true : false);
-
-function toggle_mode() {
-  if (hard_mode.value) {
-    emit("toggle-priority-mode", "soft");
-    hard_mode.value = false;
-  } else {
-    emit("toggle-priority-mode", "hard");
-    hard_mode.value = true;
-  }
-}
 function toggle_ignore_multiple(val) {
   emit("update:ignore_multiple", val);
 }

@@ -7,10 +7,12 @@ export function getStorage(key, defaultValue, transform = (value) => value) {
   }
 
   try {
+    // 优先尝试 JSON（对象 / 数组 / 数字 / boolean）
     const parsed = JSON.parse(raw);
     return transform(parsed);
   } catch {
-    return defaultValue;
+    // 如果 JSON 解析失败，说明是纯字符串
+    return transform(raw);
   }
 }
 

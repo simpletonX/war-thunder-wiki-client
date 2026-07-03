@@ -7,7 +7,8 @@
       <div class="flex items-center">
         <div
           class="type-tab-item flex items-center px-[10px] cursor-pointer"
-          v-for="item in vehicle_type"
+          v-for="item in filtered_vehicle_type"
+          :key="item"
           :class="{ active: vt == item }"
           @click="toggleVehicleType(item)"
         >
@@ -15,6 +16,7 @@
             class="type-icon"
             v-html="main_role_icons[vehicle_type_icons[item]]"
           ></div>
+
           <div class="text ml-[4px] text-[14px]">
             {{ vehicle_type_texts[item] }}
           </div>
@@ -65,13 +67,13 @@
           <div class="cirle bg-[#169ccd]"></div>
           <span class="text-[14px] ml-1 pt-[1px]">导出图像</span>
         </div>
-        <!-- <div
+        <div
           class="cursor-pointer flex items-center mr-5"
           @click="openUpdateLog"
         >
           <div class="cirle bg-[#9546f5]"></div>
           <span class="text-[14px] ml-1 pt-[1px]">更新日志</span>
-        </div> -->
+        </div>
         <!-- <div class="cursor-pointer flex items-center mr-5" @click="openDoc">
           <div class="cirle bg-[#ff7a22]"></div>
           <span class="text-[14px] ml-1 pt-[1px]">完全使用手册</span>
@@ -79,7 +81,7 @@
         <div class="cursor-pointer flex items-center mr-5" @click="openDoc">
           <div class="cirle bg-[#ff7a22]"></div>
           <span class="text-[14px] ml-1 pt-[1px] flex items-center">
-            <span>在线文档</span>
+            <span>用户协议</span>
             <!-- <svg
               class="cir-btn__arrow mb-1 ml-1"
               viewBox="0 0 23 23"
@@ -165,7 +167,7 @@
         <img :src="`/static/setting-banner-2_mini.png`" class="w-[490px]" />
       </div>
 
-      <!-- 个性化配置 -->
+      <!-- 个性化选项 -->
       <div class="personalization">
         <div class="setting-type mb-2 relative w-full flex justify-center">
           <div
@@ -174,7 +176,7 @@
           <div
             class="label text-gray-500 text-[14px] text-center bg-[rgb(26,38,41)] relative px-4"
           >
-            个性化配置
+            个性化选项
           </div>
         </div>
 
@@ -208,7 +210,7 @@
           </Select>
         </div>
 
-        <div class="setting-item flex justify-between items-center">
+        <div class="setting-item flex justify-between items-center mb-1">
           <div class="label text-[15px]">背景模糊度</div>
           <NumberField
             :model-value="settings.blur_number"
@@ -224,7 +226,7 @@
           </NumberField>
         </div>
 
-        <div class="setting-item flex justify-between items-center">
+        <div class="setting-item flex justify-between items-center mb-1">
           <div class="label text-[15px]">科技树还原游戏UI风格</div>
           <div class="flex items-center gap-3">
             <Checkbox
@@ -238,30 +240,7 @@
           </div>
         </div>
 
-        <div class="setting-item flex justify-between items-center">
-          <div class="label text-[15px]">数学格式</div>
-          <Select
-            :modelValue="settings.math_format"
-            @update:model-value="(val) => updateSettings('math_format', val)"
-          >
-            <SelectTrigger class="max-w-[310px]">
-              <SelectValue placeholder="请选择数学格式" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>math format</SelectLabel>
-                <SelectItem value="thousands_separator"
-                  >千位分隔制（1,008,611）</SelectItem
-                >
-                <SelectItem value="Chinese_number_unit_system"
-                  >中文万亿单位制（100.86万）</SelectItem
-                >
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div class="setting-item flex justify-between items-center mb-2">
+        <!-- <div class="setting-item flex justify-between items-center mb-1">
           <div class="label text-[15px] flex items-center">
             全局加载动画
             <TooltipProvider>
@@ -287,10 +266,135 @@
             />
             <Label for="loading_animation">启用</Label>
           </div>
+        </div> -->
+
+        <div class="setting-item flex justify-between items-center mb-1">
+          <div class="label text-[15px] flex items-center">
+            导出图像质量
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <PhWarningCircle :size="18" class="ml-1 opacity-60" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p class="text-[14px]">
+                    更高质量会导出更清晰的图片，但也会增加生成时间和内存占用。
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <Select
+            :modelValue="settings.export_image_quality"
+            @update:model-value="
+              (val) => updateSettings('export_image_quality', val)
+            "
+          >
+            <SelectTrigger class="max-w-[310px]">
+              <SelectValue placeholder="请选择导出质量" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>export image quality</SelectLabel>
+                <SelectItem value="standard">标准（快速）</SelectItem>
+                <SelectItem value="high">高清（均衡）</SelectItem>
+                <SelectItem value="ultra">超清（慢）</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
-      <!-- 快捷操作配置 -->
+      <!-- 数据模型选项 -->
+      <div class="data-model">
+        <div class="setting-type mb-2 relative w-full flex justify-center">
+          <div
+            class="type-line absolute w-full h-[1px] bg-gray-700 left-0 top-1/2 mt-[-1px]"
+          ></div>
+          <div
+            class="label text-gray-500 text-[14px] text-center bg-[rgb(26,38,41)] relative px-4"
+          >
+            数据模型选项
+          </div>
+        </div>
+
+        <div class="setting-item flex justify-between items-center mb-1">
+          <div class="label text-[15px]">数学格式</div>
+          <Select
+            :modelValue="settings.math_format"
+            @update:model-value="(val) => updateSettings('math_format', val)"
+          >
+            <SelectTrigger class="max-w-[310px]">
+              <SelectValue placeholder="请选择数学格式" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>math format</SelectLabel>
+                <SelectItem value="thousands_separator"
+                  >千位分隔制（1,008,611）</SelectItem
+                >
+                <SelectItem value="Chinese_number_unit_system"
+                  >中文万亿单位制（100.86万）</SelectItem
+                >
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div class="setting-item flex justify-between items-center mb-1">
+          <div class="label text-[15px]">载具名称格式</div>
+          <Select
+            :modelValue="settings.vehicle_title_type"
+            @update:model-value="
+              (val) => updateSettings('vehicle_title_type', val)
+            "
+          >
+            <SelectTrigger class="max-w-[310px]">
+              <SelectValue placeholder="请选择名称格式" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>vehicle-title type</SelectLabel>
+                <SelectItem value="chinese_title">中文简体_Chinese</SelectItem>
+                <SelectItem value="t_chinese_title"
+                  >中文繁體_TChinese</SelectItem
+                >
+                <SelectItem value="title">English International</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div class="setting-item flex justify-between items-center mb-1">
+          <div class="label text-[15px] flex items-center">
+            启用隐藏的银币载具
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <PhWarningCircle :size="18" class="ml-1 opacity-60" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p class="text-[14px]">
+                    隐藏中的银币载具多见于已过期的限时活动，在游戏科技树中已不可见。为了研发计算的准确性，建议非必要不启用。
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <div class="flex items-center gap-3">
+            <Checkbox
+              id="hidden_vehicle_visible"
+              :modelValue="settings.hidden_vehicle_visible"
+              @update:model-value="
+                (val) => updateSettings('hidden_vehicle_visible', val)
+              "
+            />
+            <Label for="hidden_vehicle_visible">启用</Label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 快捷操作选项 -->
       <div class="quick-operation">
         <div class="setting-type mb-2 relative w-full flex justify-center">
           <div
@@ -299,13 +403,13 @@
           <div
             class="label text-gray-500 text-[14px] text-center bg-[rgb(26,38,41)] relative px-4"
           >
-            快捷操作
+            快捷操作选项
           </div>
         </div>
 
         <div class="setting-item flex justify-between items-center">
           <div class="label text-[15px] flex">
-            左键单击折叠载具策略
+            左键单击折叠载具组
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger as-child>
@@ -327,13 +431,13 @@
                 (val) => updateSettings('multiple_mode', val)
               "
             />
-            <Label for="terms">单击首选折叠载具</Label>
+            <Label for="terms">直接选中第一个折叠载具</Label>
           </div>
         </div>
 
         <div class="setting-item flex justify-between items-center">
           <div class="label text-[15px] flex">
-            全选折叠载具策略
+            全选时折叠载具执行策略
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger as-child>
@@ -355,7 +459,7 @@
                 (val) => updateSettings('all_select_mode', val)
               "
             />
-            <Label for="terms-2">全选时仅首选折叠载具</Label>
+            <Label for="terms-2">仅选中第一个折叠载具</Label>
           </div>
         </div>
 
@@ -420,6 +524,7 @@ import {
   vehicle_type,
   vehicle_type_texts,
   preset_wallpapers,
+  ignore_tree_data,
 } from "@/utils/dict";
 import { ref, computed, watch } from "vue";
 import { storeToRefs } from "pinia";
@@ -470,6 +575,7 @@ const emit = defineEmits([
   "automatic-calculate",
   "exportImage",
   "update:totals",
+  "openUpdateLog",
 ]);
 
 function exportImage() {
@@ -484,11 +590,7 @@ const vehicle_type_icons = {
   boats: "Heavy boat",
 };
 const treeDataStore = useTreeDataStore();
-const {
-  updateSettings,
-  updateSelectedStateMapAllLocal,
-  updateOwnedVehicleIds,
-} = treeDataStore;
+const { updateSettings, updateOwnedVehicleIds, clearAllSSMap } = treeDataStore;
 const {
   settings,
   total_stats_complete,
@@ -496,6 +598,7 @@ const {
   selected_state_map,
   tree_data,
   researchable_set,
+  types,
 } = storeToRefs(treeDataStore);
 const setting_visible = ref(false);
 const join_visible = ref(false);
@@ -548,6 +651,12 @@ watch(
   { immediate: true, deep: true },
 );
 
+const filtered_vehicle_type = computed(() => {
+  return vehicle_type.filter((item) => {
+    return !ignore_tree_data?.[types.value.country_code]?.[item];
+  });
+});
+
 function toggleStatsMode() {
   if (total_stats_mode.value == "pending") {
     total_stats_mode.value = "complete";
@@ -556,9 +665,8 @@ function toggleStatsMode() {
   }
 }
 
-const update_log_visible = ref(true);
 function openUpdateLog() {
-  update_log_visible.value = true;
+  emit("openUpdateLog", true);
 }
 
 const is_all_selected = computed(() => {
@@ -607,17 +715,20 @@ function toggleSelectAll() {
 
 // 重置所有本地存储选中态数据
 function clearCache() {
-  const ssmap = selected_state_map.value;
-  updateSelectedStateMapAllLocal({}, true);
-  alert("已清理旧缓存: " + JSON.stringify(ssmap));
+  clearAllSSMap();
+  alert("已清理所有科技树的选中状态缓存");
   emit("clear");
 }
 
 // 跳转至算法工作原理
 function openDoc() {
   // window.open("https://blind-thunder.wiki/#/doc", "_blank");
+  // window.open(
+  //   "https://icnv6yvo8yvw.feishu.cn/docx/TBKFd623mowK9pxwGj5cwiRenwh?from=from_copylink",
+  //   "_blank",
+  // );
   window.open(
-    "https://icnv6yvo8yvw.feishu.cn/docx/TBKFd623mowK9pxwGj5cwiRenwh?from=from_copylink",
+    "https://icnv6yvo8yvw.feishu.cn/docx/Sx1sdwhsPoSKzaxUCeZcaXo9nvg?from=from_copylink",
     "_blank",
   );
 }
@@ -772,66 +883,4 @@ const plan_visible = ref(false);
   transition: 300ms ease;
 }
 /* 复选框 */
-
-/* 加入群聊 */
-/* From Uiverse.io by d4niz */
-.cir-btn {
-  --ink: rgb(32, 39, 51);
-  --cloud: var(--color-cloud, #ffffff);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 42px;
-  padding: 0 20px 0 22px;
-  border: 0;
-  border-radius: 90px;
-  background: var(--ink);
-  color: var(--cloud);
-  font-family:
-    "Inter",
-    system-ui,
-    -apple-system,
-    sans-serif;
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: -0.005em;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow:
-    0 1px 1px rgba(14, 17, 22, 0.06),
-    0 14px 28px -18px rgba(14, 17, 22, 0.4);
-  transition:
-    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
-    background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.cir-btn__arrow {
-  width: 16px;
-  height: 16px;
-  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.cir-btn:hover {
-  background: #1a1f28;
-  box-shadow:
-    0 1px 1px rgba(14, 17, 22, 0.08),
-    0 20px 36px -16px rgba(14, 17, 22, 0.48);
-}
-
-.cir-btn:hover .cir-btn__arrow {
-  transform: translate(2px, -2px);
-}
-
-.cir-btn:focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 3px rgba(46, 125, 239, 0.32),
-    0 14px 28px -18px rgba(14, 17, 22, 0.4);
-}
-
-.cir-btn:active {
-  opacity: 0.8;
-}
-/* 加入群聊 */
 </style>

@@ -39,9 +39,9 @@
         </div>
         <div
           class="title absolute right-[5px] top-[5px] text-[13px] z-10"
-          :title="item.title"
+          :title="item[settings.vehicle_title_type]"
         >
-          {{ item.title }}
+          {{ item[settings.vehicle_title_type] }}
         </div>
 
         <!-- currentPointsType: 0 显示Br，isDefault: false 显示Br -->
@@ -71,10 +71,12 @@
           <span
             class="text-[12px] mr-[1px] pt-[2px]"
             v-if="item.type == 'single'"
-            >{{ item.rp_view || "初始" }}</span
+            >{{ item.rp ? item.rp_view : "初始" }}</span
           >
           <span class="text-[12px] mr-[1px] pt-[2px]" v-else>{{
-            total_selected_items_stats?.rp_view || "初始"
+            total_selected_items_stats?.rp
+              ? total_selected_items_stats?.rp_view
+              : "初始"
           }}</span>
           <img :src="`/static/rp.png`" class="w-[16px]" />
         </div>
@@ -86,10 +88,12 @@
           <span
             class="text-[12px] mr-[1px] pt-[2px]"
             v-if="item.type == 'single'"
-            >{{ item.sp_view || "初始" }}</span
+            >{{ item.sp ? item.sp_view : "初始" }}</span
           >
           <span class="text-[12px] mr-[1px] pt-[2px]" v-else>{{
-            total_selected_items_stats?.sp_view || "初始"
+            total_selected_items_stats?.sp
+              ? total_selected_items_stats?.sp_view
+              : "初始"
           }}</span>
           <img :src="`/static/war-points.png`" class="w-[18px]" />
         </div>
@@ -102,7 +106,7 @@
         </div>
 
         <!-- 选中态显示图标 -->
-        <PhArrowFatLineUp class="selected-icon" :size="17" />
+        <PhSealCheck class="selected-icon" :size="18" weight="fill" />
 
         <!-- 被视为规划目标时的额外标识 -->
         <div class="target_mark">目标载具</div>
@@ -111,9 +115,9 @@
         <div class="owned_mark" v-if="!isPremium">已拥有</div>
       </div>
 
-      <!-- 向下垂至展示所有选中的sub-item -->
+      <!-- 已选中的折叠载具个数 -->
       <div class="select_items" v-if="current_select_items?.length">
-        已选 {{ current_select_items.length }}
+        已选 {{ current_select_items.length }} 个
       </div>
 
       <!-- 直升机指向箭头 -->
@@ -229,6 +233,15 @@
       >
         <div class="arrow-tip w-0 h-0 absolute bottom-[-4px] left-[-3px]"></div>
       </div>
+
+      <!-- 隐藏载具标识 -->
+      <div
+        class="hidden_mark absolute w-full h-full top-0 left-0 overflow-hidden cursor-pointer"
+        @click.prevent.stop="clickTrigger(item)"
+        v-if="checkItemPurchaseVisible(item, isPremium)"
+      >
+        <div class="ribbon"></div>
+      </div>
     </div>
 
     <!-- 展开折叠载具 -->
@@ -255,10 +268,10 @@
             @contextmenu.prevent.stop="openFastFuncs($event, subItem)"
           >
             <div class="icon absolute bottom-[3px] left-[2px]">
-              <img :src="subItem.vehicle_icon" alt="" />
+              <img :src="subItem.vehicle_icon" loading="lazy" v-fade-image />
             </div>
             <div class="title absolute right-[5px] top-[5px] text-[13px] z-10">
-              {{ subItem.title }}
+              {{ subItem[settings.vehicle_title_type] }}
             </div>
 
             <!-- currentPointsType: 0 显示Br，isDefault: false 显示Br -->
@@ -312,13 +325,22 @@
             </div>
 
             <!-- 选中态显示图标 -->
-            <PhArrowFatLineUp class="selected-icon" :size="17" />
+            <PhSealCheck class="selected-icon" :size="18" weight="fill" />
 
             <!-- 被视为规划目标时的额外标识 -->
             <div class="target_mark">目标载具</div>
 
             <!-- 自动规划基线中已拥有载具的额外标识 -->
             <div class="owned_mark" v-if="!isPremium">已拥有</div>
+
+            <!-- 隐藏载具标识 -->
+            <div
+              class="hidden_mark absolute w-full h-full top-0 left-0 overflow-hidden cursor-pointer"
+              @click.prevent.stop="clickTrigger(subItem)"
+              v-if="checkItemPurchaseVisible(subItem, isPremium)"
+            >
+              <div class="ribbon"></div>
+            </div>
           </div>
         </div>
       </transition>
@@ -331,10 +353,10 @@ import { computed, defineProps, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { usePublicMaskStore } from "@/stores/public_mask";
 import { useTreeDataStore } from "@/stores/tree_data_store";
-import { PhArrowFatLineUp } from "@phosphor-icons/vue";
+import { PhSealCheck } from "@phosphor-icons/vue";
 import { terminal_vehicles } from "@/utils/terminal_vehicles";
 import { main_role_icons } from "@/utils/icon_svgs";
-import { parseNumber } from "@/utils/treeDataUtils";
+import { parseNumber, checkItemPurchaseVisible } from "@/utils/treeDataUtils";
 
 const props = defineProps({
   // 当前载具对象
@@ -357,7 +379,8 @@ const props = defineProps({
 const emit = defineEmits(["open-fast-funcs"]);
 
 const treeDataStore = useTreeDataStore();
-const { settings, selected_state_map, types } = storeToRefs(treeDataStore);
+const { settings, selected_state_map, types } =
+  storeToRefs(treeDataStore);
 const is_terminal = computed(
   () =>
     terminal_vehicles[types.value.country_code][types.value.vehicle_type][
@@ -413,8 +436,8 @@ const total_selected_items_stats = computed(() => {
   const items = current_select_items.value || [];
   const result = items.reduce(
     (acc, item) => {
-      acc.rp += Number(item.rp || 0);
-      acc.sp += Number(item.sp || 0);
+      acc.rp += item.rp || 0;
+      acc.sp += item.sp || 0;
       return acc;
     },
     { rp: 0, sp: 0 },
@@ -596,11 +619,11 @@ function openFastFuncs(event, target_item) {
 
   /* 载具选中状态样式 */
   /* 普通载具选中状态图标主题色 */
-  --default-icon-bg: rgba(185, 215, 243, 0.5);
+  --default-icon-bg: 185, 215, 243;
   /* 高级载具选中状态图标主题色 */
-  --prem-icon-bg: rgba(255, 211, 124, 0.5);
+  --prem-icon-bg: 255, 211, 124;
   /* 高级载具选中状态图标主题色 */
-  --squad-icon-bg: rgba(126, 227, 31, 0.5);
+  --squad-icon-bg: 126, 227, 31;
   /* 普通载具选中状态顶边框色 */
   --default-selected_border_top: #cacaca;
   /* 高级载具选中状态顶边框色 */
@@ -641,13 +664,13 @@ function openFastFuncs(event, target_item) {
 }
 .wt-tree-item.selected .selected-icon {
   opacity: 1;
-  fill: var(--default-icon-bg);
+  fill: rgba(var(--default-icon-bg), 0.8);
 }
 .wt-tree-item.selected.prem .selected-icon {
-  fill: var(--prem-icon-bg);
+  fill: rgba(var(--prem-icon-bg), 0.8);
 }
 .wt-tree-item.selected.squad .selected-icon {
-  fill: var(--squad-icon-bg);
+  fill: rgba(var(--squad-icon-bg), 0.8);
 }
 .wt-tree-item.selected::after {
   content: "";
@@ -656,28 +679,9 @@ function openFastFuncs(event, target_item) {
   height: 25px;
   top: 0;
   left: 0;
-  background-image: linear-gradient(
-    to bottom,
-    var(--default-icon-bg),
-    transparent
-  );
-}
-.wt-tree-item.prem.selected::after {
-  background-image: linear-gradient(
-    to bottom,
-    var(--prem-icon-bg),
-    transparent
-  );
-}
-.wt-tree-item.squad.selected::after {
-  background-image: linear-gradient(
-    to bottom,
-    var(--squad-icon-bg),
-    transparent
-  );
 }
 .wt-tree-item.unactive_mode:not(.true_select_mode) {
-  opacity: 0.6;
+  opacity: 0.75;
 }
 .wt-tree-item.selected {
   opacity: 1 !important;
@@ -779,6 +783,32 @@ function openFastFuncs(event, target_item) {
   max-width: 90%;
   text-overflow: ellipsis;
   overflow: hidden;
+  white-space: nowrap;
+}
+.hidden_mark .ribbon {
+  position: absolute;
+  top: 10px;
+  left: -35px;
+  padding: 4px 50px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #1a1a1a;
+  transform: rotate(-45deg);
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}
+.new_vehicle .ribbon {
+  position: absolute;
+  top: 10px;
+  left: -35px;
+  padding: 4px 50px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #1a1a1a;
+  transform: rotate(-45deg);
+  background: linear-gradient(90deg, #ffd700, #fffdfa);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
 }
 </style>

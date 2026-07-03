@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { unlock_quantitys } from "../src/utils/dict.js";
+import { unlock_quantitys } from "../src/utils/unlock_quantitys.js";
 import { planShortestResearchPath } from "../src/utils/researchPathPlanner.js";
 import { terminal_vehicles } from "../src/utils/terminal_vehicles.js";
 
@@ -148,35 +148,22 @@ for (const countryCode of countries) {
       ).find((index) => index !== targetColumn);
 
       if (priorityColumn != null) {
-        for (const priorityMode of ["soft", "hard"]) {
-          const priorityPlan = planShortestResearchPath({
-            treeData,
-            targetIds: [targetId],
-            plannedPremiumIds: plannedPremiumId
-              ? [plannedPremiumId]
-              : [],
-            unlockQuantityMap,
-            terminalVehicles: terminal_vehicles,
-            countryCode,
-            vehicleType,
-            priorityColumns: [priorityColumn],
-            priorityMode,
-            maxIterations: 2_000,
-          });
+        const priorityPlan = planShortestResearchPath({
+          treeData,
+          targetIds: [targetId],
+          plannedPremiumIds: plannedPremiumId ? [plannedPremiumId] : [],
+          unlockQuantityMap,
+          terminalVehicles: terminal_vehicles,
+          countryCode,
+          vehicleType,
+          priorityColumns: [priorityColumn],
+        });
 
-          assertValidPlan(
-            priorityPlan,
-            treeData,
-            targetId,
-            unlockQuantityMap,
-          );
-          assert.equal(priorityPlan.mode, `priority-${priorityMode}`);
-          if (plannedPremiumId) {
-            assert.equal(
-              priorityPlan.premiumIds.includes(plannedPremiumId),
-              true,
-            );
-          }
+        assertValidPlan(priorityPlan, treeData, targetId, unlockQuantityMap);
+        assert.equal(priorityPlan.mode, "priority");
+        assert.equal(priorityPlan.searchComplete, true);
+        if (plannedPremiumId) {
+          assert.equal(priorityPlan.premiumIds.includes(plannedPremiumId), true);
         }
 
         const ownedResearchId = plan.selectedIds.find((id) => {
@@ -198,7 +185,6 @@ for (const countryCode of countries) {
             countryCode,
             vehicleType,
             priorityColumns: [priorityColumn],
-            priorityMode: "soft",
           });
 
           assertValidPlan(
@@ -299,14 +285,13 @@ test("owned researchable vehicles cut dependencies and are excluded from output"
   assert.equal(plan.totalSp, 3);
 });
 
-test("china aviation soft priority does not extend an already unlocked rank", () => {
+test("china aviation priority does not extend an already unlocked rank", () => {
   const treeData = loadTree("china", "aviation");
   const plan = planShortestResearchPath({
     treeData,
     targetIds: ["j_15t"],
     plannedPremiumIds: ["jh_7a_prototype"],
     priorityColumns: [1],
-    priorityMode: "soft",
     unlockQuantityMap: unlock_quantitys.china.aviation,
     terminalVehicles: terminal_vehicles,
     countryCode: "china",
@@ -327,7 +312,7 @@ test("china aviation soft priority does not extend an already unlocked rank", ()
   assert.equal(plan.premiumIds.includes("jh_7a_prototype"), true);
 });
 
-test("china ground soft planning matches the exact minimum-RP result", () => {
+test("china ground priority planning keeps the exact minimum-RP result", () => {
   const treeData = loadTree("china", "ground");
   const params = {
     treeData,
@@ -342,7 +327,6 @@ test("china ground soft planning matches the exact minimum-RP result", () => {
   const plan = planShortestResearchPath({
     ...params,
     priorityColumns: [1],
-    priorityMode: "soft",
   });
   const unprioritizedPlan = planShortestResearchPath(params);
 
@@ -388,13 +372,10 @@ test("exact minimum-RP search matches exhaustive enumeration", () => {
     treeData,
     targetIds: ["target"],
     priorityColumns: [2],
-    priorityMode: "soft",
     unlockQuantityMap: requirements,
     terminalVehicles: {},
     countryCode: "test",
     vehicleType: "ground",
-    // 精确模式不能因为旧的迭代参数过小而返回未经证明的结果。
-    maxIterations: 1,
   });
 
   const entries = [...plan.graph.research.values()];
@@ -449,7 +430,7 @@ test("exact minimum-RP search matches exhaustive enumeration", () => {
   );
 });
 
-test("soft priority ignores SP when minimum-RP routes are tied", () => {
+test("priority ignores SP when minimum-RP routes are tied", () => {
   const treeData = [
     {
       rank: "I",
@@ -475,7 +456,6 @@ test("soft priority ignores SP when minimum-RP routes are tied", () => {
     treeData,
     targetIds: ["target"],
     priorityColumns: [2],
-    priorityMode: "soft",
     unlockQuantityMap: { I: 2, II: 0 },
     terminalVehicles: {},
     countryCode: "test",
@@ -487,6 +467,117 @@ test("soft priority ignores SP when minimum-RP routes are tied", () => {
   assert.equal(plan.selectedIds.includes("preferred"), true);
   assert.equal(plan.selectedIds.includes("low_sp"), false);
   assert.equal(plan.totalSp, 1029);
+});
+
+test("priority follows the provided column order when RP and vehicle count are tied", () => {
+  const treeData = [
+    {
+      rank: "I",
+      researchable_vehicles: [
+        [{ type: "single", data_unit_id: "dependency", rp: 10, sp: 10 }],
+        [{ type: "single", data_unit_id: "second_choice", rp: 10, sp: 1 }],
+        [{ type: "single", data_unit_id: "first_choice", rp: 10, sp: 999 }],
+      ],
+      premium_vehicles: [],
+    },
+    {
+      rank: "II",
+      researchable_vehicles: [
+        [{ type: "single", data_unit_id: "target", rp: 20, sp: 20 }],
+        [],
+        [],
+      ],
+      premium_vehicles: [],
+    },
+  ];
+
+  const plan = planShortestResearchPath({
+    treeData,
+    targetIds: ["target"],
+    priorityColumns: [2, 1],
+    unlockQuantityMap: { I: 2, II: 0 },
+    terminalVehicles: {},
+    countryCode: "test",
+    vehicleType: "ground",
+  });
+
+  assert.equal(plan.ok, true);
+  assert.equal(plan.selectedIds.includes("first_choice"), true);
+  assert.equal(plan.selectedIds.includes("second_choice"), false);
+  assert.deepEqual(plan.priorityVector, [1, 0]);
+});
+
+test("priority does not add optional zero-RP vehicles just to increase preference hits", () => {
+  const treeData = [
+    {
+      rank: "I",
+      researchable_vehicles: [
+        [],
+        [{ type: "single", data_unit_id: "rank1", rp: 10, sp: 10 }],
+      ],
+      premium_vehicles: [],
+    },
+    {
+      rank: "II",
+      researchable_vehicles: [
+        [{ type: "single", data_unit_id: "optional_zero", rp: 0, sp: 0 }],
+        [{ type: "single", data_unit_id: "rank2", rp: 20, sp: 20 }],
+      ],
+      premium_vehicles: [],
+    },
+    {
+      rank: "III",
+      researchable_vehicles: [
+        [],
+        [{ type: "single", data_unit_id: "target", rp: 30, sp: 30 }],
+      ],
+      premium_vehicles: [],
+    },
+  ];
+
+  const plan = planShortestResearchPath({
+    treeData,
+    targetIds: ["target"],
+    priorityColumns: [0],
+    unlockQuantityMap: { I: 1, II: 1, III: 0 },
+    terminalVehicles: {},
+    countryCode: "test",
+    vehicleType: "ground",
+  });
+
+  assert.equal(plan.ok, true);
+  assert.equal(plan.totalRp, 60);
+  assert.equal(plan.selectedIds.includes("optional_zero"), false);
+  assert.deepEqual(plan.selectedIds, ["rank1", "rank2", "target"]);
+});
+
+test("ussr aviation priority route does not add unrelated first-column vehicles", () => {
+  const treeData = loadTree("ussr", "aviation");
+  const params = {
+    treeData,
+    targetIds: ["su_30sm2", "su_34"],
+    unlockQuantityMap: unlock_quantitys.ussr.aviation,
+    terminalVehicles: terminal_vehicles,
+    countryCode: "ussr",
+    vehicleType: "aviation",
+  };
+  const baseline = planShortestResearchPath(params);
+  const priorityPlan = planShortestResearchPath({
+    ...params,
+    priorityColumns: [3],
+  });
+  const selectedColumns = new Set(
+    priorityPlan.selectedIds.map(
+      (id) => priorityPlan.graph.research.get(id).columnIndex,
+    ),
+  );
+
+  assert.equal(priorityPlan.ok, true);
+  assert.equal(priorityPlan.mode, "priority");
+  assert.equal(priorityPlan.totalRp, baseline.totalRp);
+  assert.equal(priorityPlan.selectedIds.length, baseline.selectedIds.length);
+  assert.equal(selectedColumns.has(0), false);
+  assert.equal(selectedColumns.has(1), false);
 });
 
 test("ignore multiple uses only the first folded vehicle as a filler", () => {
@@ -531,10 +622,9 @@ test("ignore multiple uses only the first folded vehicle as a filler", () => {
     ...params,
     ignoreMultiple: true,
   });
-  const ignoredHardPlan = planShortestResearchPath({
+  const ignoredPriorityPlan = planShortestResearchPath({
     ...params,
     priorityColumns: [1],
-    priorityMode: "hard",
     ignoreMultiple: true,
   });
 
@@ -543,8 +633,8 @@ test("ignore multiple uses only the first folded vehicle as a filler", () => {
   assert.equal(ignoredPlan.selectedIds.includes("a1_extra"), false);
   assert.equal(ignoredPlan.selectedIds.includes("b1"), true);
   assert.equal(ignoredPlan.searchComplete, true);
-  assert.equal(ignoredHardPlan.selectedIds.includes("a1_extra"), false);
-  assert.equal(ignoredHardPlan.selectedIds.includes("b1"), true);
+  assert.equal(ignoredPriorityPlan.selectedIds.includes("a1_extra"), false);
+  assert.equal(ignoredPriorityPlan.selectedIds.includes("b1"), true);
 });
 
 test("ignore multiple keeps every initial Rank-I zero-RP folded vehicle", () => {
@@ -590,7 +680,7 @@ test("ignore multiple keeps every initial Rank-I zero-RP folded vehicle", () => 
   assert.equal(plan.rankCounts[0], 2);
 });
 
-test("large ground and aviation matrix has valid and irreducible soft routes", () => {
+test("large ground and aviation matrix has valid and irreducible priority routes", () => {
   let scenarioCount = 0;
 
   for (const countryCode of countries) {
@@ -653,7 +743,6 @@ test("large ground and aviation matrix has valid and irreducible soft routes", (
               ? [plannedPremiumId]
               : [],
             priorityColumns: [priorityColumn],
-            priorityMode: "soft",
             unlockQuantityMap,
             terminalVehicles: terminal_vehicles,
             countryCode,
@@ -667,7 +756,7 @@ test("large ground and aviation matrix has valid and irreducible soft routes", (
             targetIds[0],
             unlockQuantityMap,
           );
-          assert.equal(plan.mode, "priority-soft", label);
+          assert.equal(plan.mode, "priority", label);
           for (const ownedId of ownedResearchIds) {
             assert.equal(plan.selectedIds.includes(ownedId), false, label);
           }

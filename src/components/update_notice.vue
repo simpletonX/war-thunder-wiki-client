@@ -1,50 +1,95 @@
 <template>
-  <!-- 用户协议面板 -->
+  <!-- 更新日志面板 -->
   <public_dialog :modelValue="modelValue" @update:modelValue="close_mask">
     <template #header>
-      <div class="title flex justify-between items-center">
+      <div class="flex justify-between items-center">
         <span>v{{ version }} 更新日志</span>
         <span class="text-[rgba(255,255,255,0.4)] text-[14px]"
-          >2026-06-25 13:12</span
+          >2026-07-03 20:50</span
         >
       </div>
     </template>
     <template #main>
-      <div class="text-[14px] mb-4 mt-2 w-[600px]">
-        <div class="title text-[16px] font-bold mb-2">
-          交互优化调整：对折叠载具组进行右键会直接展开折叠载具（等效于单击左键展开）解决因勾选偏好设置中的“单击首选折叠载具”选项导致操作繁琐问题。
+      <div class="text-[14px] mb-4 mt-2 w-[520px]">
+        <div class="quote mb-[10px]">
+          <div class="mb-2"><b>重要更新内容一览：</b></div>
+          <p class="mb-2">
+            修复与游戏中的科技树数据不一致的问题（额外显示的隐藏银币载具会影响最终计算的研发点结果导致实际路线与游戏科技树不一致）。
+          </p>
+          <p class="mb-2">
+            偏好设置新增选项【载具名称格式】用于切换当前科技树显示的载具名称格式（简中/繁中/英文）（默认为简中）。
+          </p>
+          <p>
+            由于科技树数据结构改动，为了避免程序错误，本次版本更新将会强制执行一次【清理缓存】。
+          </p>
         </div>
-        <img :src="`/static/1.png`" class="rounded-[10px] mb-4">
-        <div class="title text-[16px] font-bold mb-2">
-          增强数据显示：折叠载具组展示的自身研发点数/银狮只有在未选中其下折叠载具时显示为第一个折叠载具的研发点数/银狮，否则显示其下选中的折叠载具总和；选中的折叠载具数量会在对应折叠载具组左下方标注。
+        <div class="quote fly_book_link mb-[30px]">
+          <span>
+            <span>➤&nbsp;详细说明&nbsp;&nbsp;</span>
+            <a
+              href="https://icnv6yvo8yvw.feishu.cn/wiki/JRG8wr2W7ixIWtktta9cstsfnhf"
+              target="_blank"
+              >https://icnv6yvo8yvw.feishu.cn/wiki/JRG8wr2W7ixIWtktta9cstsfnhf</a
+            >
+          </span>
         </div>
-        <img :src="`/static/2.png`" class="rounded-[10px] mb-4">
-        <div class="title text-[16px] font-bold mb-2">
-          BUG修复：不完全修复上下滚动时造成的图标、载具文字信息丢失问题。
-        </div>
-        <img :src="`/static/3.PNG`" class="rounded-[10px] mb-4">
-        <div class="title text-[16px] font-bold mb-2">
-          BUG修复：修复日本陆军科技树一级新载具“Ho-Ni
-          II”的向下联动箭头指向错误问题。
-        </div>
-        <img :src="`/static/4.PNG`" class="rounded-[10px] mb-4">
-        <div class="title text-[16px] font-bold mb-2">
-          UI改动：自动计算按钮替换新图标。
-        </div>
-        <img :src="`/static/5.PNG`" class="rounded-[10px] mb-4">
-        <!-- <p class="leading-[26px]">
-          - 新增载具数据M1A2 SEPv3、M1A2/战利品-HV 型、澳大利亚 M1A1/A2、T-90M/竞技场-M、美洲狮u14、F-14D...
-        </p> -->
-
-        <!-- <div class="title text-[16px] font-bold mb-2 mt-[30px]">修复日本陆军科技树一级新载具“Ho-Ni II”的向下联动箭头指向错误问题。</div> -->
-        <!-- <p class="leading-[26px]">
-          - 重构旧版导出图像功能，位于右上角导航栏中。
-        </p> -->
-
-        <!-- <div class="title text-[16px] font-bold mb-2 mt-[30px]">自动计算按钮替换新图标。</div> -->
-        <!-- <p class="mb-1">部分修复上下滚动时造成的图标、载具文字信息丢失问题。</p>
-        <p class="mb-1">修复日本陆军科技树一级新载具“Ho-Ni II”的向下联动箭头指向错误问题。</p>
-        <p class="mb-1">自动计算按钮替换新图标。</p> -->
+        <section>
+          <div class="title">加载动画等待时长下调</div>
+          <div class="text">
+            加载动画默认最少等待时长从1.1秒下调至0.5秒。偏好设置移除【启用加载动画】选项，加载动画在全局范围内永远生效。：
+          </div>
+        </section>
+        <section>
+          <div class="title">修复显示隐藏的银币载具问题</div>
+          <div class="text">
+            修复与游戏中的科技树数据不一致的问题（额外显示的隐藏银币载具会影响最终计算的研发点结果导致实际路线与游戏科技树不一致）。
+          </div>
+        </section>
+        <section>
+          <div class="title">不存在的科技树类型不再显示</div>
+          <div class="text">
+            国家中不存在的科技树类型将不会再出现于可选项中，如瑞典-远洋海军。同时切换到不存在的科技树类型将会自动重定向到【陆军】。例如：从法国-远洋海军
+            切换至 瑞典-远洋海军（不存在） 自动重定向至 瑞典-陆军。
+          </div>
+        </section>
+        <section>
+          <div class="title">偏好设置新增选项</div>
+          <div class="text">
+            偏好设置分类调整：个性化选项、数据模型选项、快捷操作选项。
+          </div>
+          <ul>
+            <li>
+              -
+              新增选项【载具名称格式】用于切换当前科技树显示的载具名称格式（简中/繁中/英文）（默认为简中）。
+            </li>
+            <li>
+              -
+              新增选项【启用隐藏的银币载具】启用后，科技树中会显示隐藏的银币载具，最终在一键计算算法里会被当作正常的载具处理；关闭后，隐藏的银币载具不会出现在科技树中，也不会被算法处理（默认关闭）。
+            </li>
+            <li>
+              -
+              新增选项【导出图像质量】，可选择标准/高清/超清（建议使用高清）。导出图像功能在等待所有外层载具图标加载完成后才能开始绘制并下载图片（加载速度取决于Gaijin服务器是否抽风以及本地缓存是否过期）。
+            </li>
+          </ul>
+        </section>
+        <section>
+          <div class="title">隐藏的银币载具新增特殊标识</div>
+          <div class="text">
+            隐藏的银币载具新增特殊标识：在载具的左上角会显示一个白色的斜条标签块，表示这是一个隐藏的银币载具（在游戏科技树中不存在的载具，已经被Gaijin隐藏）。
+          </div>
+        </section>
+        <section>
+          <div class="title">清理缓存功能改动</div>
+          <div class="text">
+            清理缓存功能从清除当前科技树选中状态数据调整为清除所有已保存的科技树选中状态数据。由于科技树数据结构改动，为了避免程序错误，本次版本更新将会强制执行一次【清理缓存】。每次切换【启用隐藏的银币载具】为启用或关闭时：由于科技树数据结构的变化，为了避免程序错误，将会强制执行一次【清理缓存】。
+          </div>
+        </section>
+        <section>
+          <div class="title">修复科技树请求失败时数据污染问题</div>
+          <div class="text">
+            修复科技树获取失败时的数据污染问题：当用户切换科技树且遇到请求错误时，会直接清空当前科技树数据并显示：科技树数据获取异常。以避免在当前科技树继续选中载具而导致数据污染。
+          </div>
+        </section>
       </div>
     </template>
   </public_dialog>
@@ -59,3 +104,88 @@ function close_mask() {
   emit("update:modelValue", false);
 }
 </script>
+
+<style scoped>
+.quote {
+  padding: 18px;
+  background-color: rgba(69, 83, 107, 0.2);
+  border-radius: 7px;
+  border-left: 4px solid #45536b;
+  line-height: 22px;
+  transition: 0.2s;
+}
+.title {
+  font-size: 17px;
+  font-weight: bold;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 4px;
+  margin-bottom: 15px;
+}
+img {
+  margin-top: 15px;
+  margin-bottom: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  padding: 7px;
+  border-radius: 7px;
+}
+section {
+  margin-bottom: 40px;
+}
+.text {
+  margin-bottom: 15px;
+}
+.fly_book_link {
+  padding: 12px 15px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fly_book_link:hover a {
+  text-decoration: underline;
+}
+.quote.fly_book_link:hover {
+  background-color: rgba(69, 83, 107, 0.4);
+  border-color: #6179a2;
+}
+.table {
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  margin-bottom: 15px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #fff;
+  font-size: 14px;
+}
+thead {
+  background: rgba(255, 255, 255, 0.05);
+}
+th {
+  text-align: left;
+  padding: 10px 0;
+  font-weight: 600;
+  text-align: center;
+}
+td {
+  padding: 6px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: center;
+}
+tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+  transition: background 0.2s;
+}
+ul {
+  padding-left: 20px;
+  margin-bottom: 20px;
+}
+li {
+  list-style-type: disc;
+  line-height: 24px;
+}
+</style>

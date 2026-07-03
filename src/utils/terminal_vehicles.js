@@ -105,10 +105,12 @@ export const terminal_vehicles = {
       mi_8tb: {
         cross_level: 1,
         has_next_item: true,
-        placeholder_item: 1,
+        placeholder_item: 0,
       },
-      mi_24p_german: {
-        move_bottom: 1,
+      mi_24d_german: {
+        cross_level: 0,
+        has_next_item: true,
+        placeholder_item: 0,
       },
       bo_105pah1: {
         cross_level: 0,

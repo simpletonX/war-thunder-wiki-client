@@ -15,7 +15,7 @@
 
 body {
   background-color: #0e1113;
-  font-family: "WTSymbols";
+  font-family: "WTSymbols", "微软雅黑";
   margin: 0;
   padding: 0;
 }
@@ -186,3 +186,21 @@ body {
   }
 }
 /* 图片加载后执行动画 */
+
+/* From Uiverse.io by d4niz */
+.cir-btn {
+  height: 42px;
+  padding: 0 20px 0 22px;
+  border-radius: 90px;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow:
+    0 1px 1px rgba(14, 17, 22, 0.06),
+    0 14px 28px -18px rgba(14, 17, 22, 0.4);
+  transition: 200ms;
+  background-color: #383f4d;
+  color: #fff;
+}
+.cir-btn:hover {
+  background-color: #2c313c;
+}
