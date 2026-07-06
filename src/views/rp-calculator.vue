@@ -49,7 +49,7 @@
       v-model:pt="currentPointsType"
       @update:vt="(val) => updateTypes('vehicle_type', val)"
       @clear="requestTreeData"
-      @automatic-calculate="automatic_options_visible = true"
+      @automatic-calculate="openAutomaticCalc"
       @exportImage="exportImage"
       @update:totals="handleTotals"
       @openUpdateLog="() => (notice_visible = true)"
@@ -272,6 +272,9 @@
     @close="closeFastFuncs"
   />
 
+  <!-- 未选中任何目标载具 -->
+  <notarget_alert v-model="notarget_alert_visible"> </notarget_alert>
+
   <!-- 载具详情页组件 -->
   <wt_item_details v-model="detail_visible" :item="current_detail_item">
   </wt_item_details>
@@ -347,6 +350,7 @@ import User_agreement from "@/components/user_agreement.vue";
 import { country_icons } from "@/utils/icon_svgs";
 import { toPng } from "html-to-image";
 import update_notice from "@/components/update_notice.vue";
+import notarget_alert from "@/components/notarget_alert.vue";
 
 const development_debug_panel = defineAsyncComponent(
   () => import("@/components/development_debug_panel.vue"),
@@ -492,7 +496,7 @@ const version = import.meta.env.VITE_APP_VERSION;
 const showFastAsTarget = computed(() => {
   const { item, isPremium } = fastFuncsState.value;
   return (
-    ["ground", "aviation"].includes(types.value.vehicle_type) &&
+    !(['helicopters'].includes(types.value.vehicle_type)) &&
     !isPremium &&
     !!item?.data_unit_id &&
     !selected_state_map.value[item.data_unit_id]
@@ -836,6 +840,16 @@ function onGlobalClick() {
 }
 
 const notice_visible = ref(false);
+const notarget_alert_visible = ref(false);
+
+function openAutomaticCalc() {
+  if (!targetVehicleIds.value.size) {
+    notarget_alert_visible.value = true;
+    return;
+  }
+  automatic_options_visible.value = true;
+}
+
 onMounted(() => {
   // v3.20版本是否已执行一次强制清理缓存标记
   const v3_20_cache_clear = getStorage("v3_20_cache_clear");

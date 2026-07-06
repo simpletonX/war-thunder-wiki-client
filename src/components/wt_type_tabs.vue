@@ -135,7 +135,7 @@
             <!-- 自动计算开线路径入口按钮 -->
             <Button
               variant="ghost"
-              v-if="['ground', 'aviation'].includes(vt)"
+              v-if="!(['helicopters'].includes(vt))"
               class="automatic_button ml-1 cursor-pointer !px-3 pt-[10px]"
               @click="emit('automatic-calculate')"
             >
@@ -508,6 +508,8 @@
       </div>
     </template>
   </public_dialog>
+
+  
 
   <!-- 方案管理面板 -->
   <plan_management v-model="plan_visible"></plan_management>

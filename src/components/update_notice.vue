@@ -10,7 +10,19 @@
       </div>
     </template>
     <template #main>
-      <div class="text-[14px] mb-4 mt-2 w-[520px]">
+      <div class="text-[14px] mb-2 mt-2 w-[520px]">
+        <div class="quote mb-8">
+          <div class="mb-2"><b>v3.21更新日志：</b></div>
+          <p class="mb-2">
+            同步最新科技树数据(版本2.57.0.27)，德国陆军科技树4.0银币载具组"M44/M55"更名为"M44/55"。苏联空军科技树13.7银币载具"米格-29K"更名为"米格-29KR"。
+          </p>
+          <p class="mb-2">
+            未选中目标载具添加独立提示弹窗，并在弹窗内附带操作示例GIF图。
+          </p>
+          <p class="mb-2">远洋海军与近岸海军开放【一键计算】功能。</p>
+        </div>
+        <!-- v3.2 -->
+        <div class="title">v3.2历史更新回顾：</div>
         <div class="quote mb-[10px]">
           <div class="mb-2"><b>重要更新内容一览：</b></div>
           <p class="mb-2">
@@ -113,6 +125,7 @@ function close_mask() {
   border-left: 4px solid #45536b;
   line-height: 22px;
   transition: 0.2s;
+  word-break: break-all;
 }
 .title {
   font-size: 17px;
