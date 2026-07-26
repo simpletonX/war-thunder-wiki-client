@@ -1,19 +1,38 @@
 <template>
   <div class="cir-tabs" role="tablist" :aria-label="ariaLabel">
-    <template v-for="(item, index) in options" :key="item.value">
-      <input
-        class="cir-tabs__r"
-        type="radio"
-        :name="name"
-        :id="getId(item, index)"
-        :value="item.id"
-        :checked="modelValue == item.id"
-        @change="onChange(item)"
-      />
+    <template
+      v-for="(item, index) in options"
+      :key="item.id ?? item.value ?? index"
+    >
+      <div
+        class="cir-tabs__item"
+        @contextmenu="onContextMenu($event, item)"
+      >
+        <input
+          class="cir-tabs__r"
+          type="radio"
+          :name="name"
+          :id="getId(item, index)"
+          :value="item.id"
+          :checked="modelValue == item.id"
+          @change="onChange(item)"
+        />
 
-      <label class="cir-tabs__t" :for="getId(item, index)" role="tab">
-        {{ item.title }}
-      </label>
+        <label
+          class="cir-tabs__t"
+          :for="getId(item, index)"
+          role="tab"
+          :title="item.removable ? '右键删除此对比' : undefined"
+        >
+          <!-- <img
+            v-if="item.icon"
+            class="cir-tabs__icon"
+            :src="item.icon"
+            alt=""
+          /> -->
+          {{ item.title }}
+        </label>
+      </div>
     </template>
   </div>
 </template>
@@ -38,23 +57,33 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(["update:modelValue", "change"]);
+const emit = defineEmits(["update:modelValue", "change", "remove"]);
 
 const getId = (item, index) => {
   return `${props.name}-${index}`;
 };
 
-const onChange = (value) => {
-  emit("update:modelValue", value);
-  emit("change", value);
+const onChange = (item) => {
+  // v-model 保存选项 ID；change 保留完整选项，兼容现有调用方。
+  emit("update:modelValue", item.id);
+  emit("change", item);
 };
+
+const remove = (item) => emit("remove", item);
+
+function onContextMenu(event, item) {
+  if (!item.removable) return;
+
+  event.preventDefault();
+  remove(item);
+}
 </script>
 
 <style scoped>
 .cir-tabs {
   display: inline-flex;
   align-items: center;
-  background:rgba(14, 17, 22, 0.5);
+  background: rgba(14, 17, 22, 0.5);
   /* border: 1px solid var(--color-edge, #e3e8ee); */
   border-radius: 999px;
   box-shadow:
@@ -70,6 +99,11 @@ const onChange = (value) => {
   position: absolute;
   opacity: 0;
   pointer-events: none;
+}
+
+.cir-tabs__item {
+  position: relative;
+  display: flex;
 }
 
 .cir-tabs__t {
@@ -88,10 +122,18 @@ const onChange = (value) => {
     background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
     color 220ms cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  font-family: "WTSymbols", "微软雅黑";
 }
 
 .cir-tabs__t:hover {
   color: var(--color-ink, #fff);
+}
+
+.cir-tabs__icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+  object-fit: contain;
 }
 
 .cir-tabs__r:checked + .cir-tabs__t {

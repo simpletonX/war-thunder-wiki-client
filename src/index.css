@@ -189,9 +189,9 @@ body {
 
 /* From Uiverse.io by d4niz */
 .cir-btn {
-  height: 42px;
-  padding: 0 20px 0 22px;
-  border-radius: 90px;
+  height: 40px;
+  padding: 0 18px 0 20px;
+  border-radius: 18px;
   font-size: 14px;
   cursor: pointer;
   box-shadow:
@@ -200,7 +200,11 @@ body {
   transition: 200ms;
   background-color: #383f4d;
   color: #fff;
+  margin-left: 5px;
+}
+.cir-btn.success {
+  background-color: #2a8055;
 }
 .cir-btn:hover {
-  background-color: #2c313c;
+  opacity: 0.7;
 }

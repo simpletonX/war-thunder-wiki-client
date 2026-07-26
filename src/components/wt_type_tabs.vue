@@ -6,7 +6,7 @@
       <!-- 顶部导航栏-左侧军种切换 -->
       <div class="flex items-center">
         <div
-          class="type-tab-item flex items-center px-[10px] cursor-pointer"
+          class="type-tab-item flex items-center cursor-pointer"
           v-for="item in filtered_vehicle_type"
           :key="item"
           :class="{ active: vt == item }"
@@ -34,6 +34,7 @@
                 id="ch1"
                 type="checkbox"
                 :checked="is_all_selected"
+                :disabled="isComparisonPreview"
                 @input="toggleSelectAll"
               />
               <div class="transition"></div>
@@ -67,39 +68,17 @@
           <div class="cirle bg-[#169ccd]"></div>
           <span class="text-[14px] ml-1 pt-[1px]">导出图像</span>
         </div>
-        <div
-          class="cursor-pointer flex items-center mr-5"
-          @click="openUpdateLog"
-        >
-          <div class="cirle bg-[#9546f5]"></div>
-          <span class="text-[14px] ml-1 pt-[1px]">更新日志</span>
-        </div>
-        <!-- <div class="cursor-pointer flex items-center mr-5" @click="openDoc">
-          <div class="cirle bg-[#ff7a22]"></div>
-          <span class="text-[14px] ml-1 pt-[1px]">完全使用手册</span>
-        </div> -->
-        <div class="cursor-pointer flex items-center mr-5" @click="openDoc">
-          <div class="cirle bg-[#ff7a22]"></div>
-          <span class="text-[14px] ml-1 pt-[1px] flex items-center">
-            <span>用户协议</span>
-            <!-- <svg
-              class="cir-btn__arrow mb-1 ml-1"
-              viewBox="0 0 23 23"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M7 17 17 7"></path>
-              <path d="M7 7h10v10"></path>
-            </svg> -->
-          </span>
-        </div>
 
         <button class="cir-btn" type="button" @click="join_visible = true">
-          <span class="text-[14px]">联系我们</span>
+          <span class="text-[14px]">加入群聊</span>
+        </button>
+
+        <button
+          class="cir-btn success"
+          type="button"
+          @click="sponsor_visible = true"
+        >
+          <span class="text-[14px]">赞助一下</span>
         </button>
 
         <!-- 底部悬浮信息栏（当前总计、切换显示研发点数、战斗权重、银狮） -->
@@ -135,7 +114,7 @@
             <!-- 自动计算开线路径入口按钮 -->
             <Button
               variant="ghost"
-              v-if="!(['helicopters'].includes(vt))"
+              v-if="!['helicopters'].includes(vt)"
               class="automatic_button ml-1 cursor-pointer !px-3 pt-[10px]"
               @click="emit('automatic-calculate')"
             >
@@ -154,7 +133,7 @@
         </div>
       </div>
     </div>
-    <div class="bottom-line"></div>
+    <!-- <div class="bottom-line"></div> -->
   </div>
 
   <!-- 偏好设置面板 -->
@@ -480,10 +459,10 @@
     </template>
   </public_dialog>
 
-  <!-- 联系我们面板 join_visible -->
+  <!-- 加入群聊面板 join_visible -->
   <public_dialog v-model="join_visible">
     <template #header>
-      <div class="title">联系我们</div>
+      <div class="title">加入群聊</div>
     </template>
     <template #main>
       <div class="flex items-center mb-2 text-[14px]">
@@ -509,10 +488,11 @@
     </template>
   </public_dialog>
 
-  
-
   <!-- 方案管理面板 -->
   <plan_management v-model="plan_visible"></plan_management>
+
+  <!-- 赞助面板 -->
+  <sponsor_options v-model="sponsor_visible"></sponsor_options>
 </template>
 
 <script setup>
@@ -564,10 +544,14 @@ import {
   toggleResearchableSelectAll,
 } from "@/utils/treeDataUtils";
 import { main_role_icons } from "@/utils/icon_svgs";
+import Sponsor_options from "./sponsor_options.vue";
 
 const props = defineProps({
   vt: String, // 当前军种类型
   pt: String, // 点数信息显示类型（pointsType）
+  // 对比预览时由父组件提供独立快照的统计结果。
+  comparisonTotalStats: { type: Object, default: null },
+  isComparisonPreview: { type: Boolean, default: false },
 });
 const emit = defineEmits([
   "update:vt",
@@ -577,7 +561,6 @@ const emit = defineEmits([
   "automatic-calculate",
   "exportImage",
   "update:totals",
-  "openUpdateLog",
 ]);
 
 function exportImage() {
@@ -606,9 +589,13 @@ const setting_visible = ref(false);
 const join_visible = ref(false);
 const total_stats_mode = ref("pending");
 const active_total_stats = computed(() =>
-  total_stats_mode.value === "complete"
-    ? total_stats_complete.value
-    : total_stats_pending.value,
+  props.comparisonTotalStats
+    ? total_stats_mode.value === "complete"
+      ? props.comparisonTotalStats.complete
+      : props.comparisonTotalStats.pending
+    : total_stats_mode.value === "complete"
+      ? total_stats_complete.value
+      : total_stats_pending.value,
 );
 const current_totals = computed(() => {
   if (settings.value.math_format == "thousands_separator") {
@@ -625,9 +612,11 @@ const current_totals = computed(() => {
 });
 const formatted_totals = computed(() => {
   // 完整total
-  const complete = total_stats_complete.value;
+  const complete =
+    props.comparisonTotalStats?.complete || total_stats_complete.value;
   // 剪除已拥有后的total
-  const pending = total_stats_pending.value;
+  const pending =
+    props.comparisonTotalStats?.pending || total_stats_pending.value;
 
   if (settings.value.math_format === "thousands_separator") {
     return {
@@ -667,11 +656,9 @@ function toggleStatsMode() {
   }
 }
 
-function openUpdateLog() {
-  emit("openUpdateLog", true);
-}
-
 const is_all_selected = computed(() => {
+  if (props.isComparisonPreview) return false;
+
   const selected = selected_state_map.value;
   const total = researchable_set.value;
 
@@ -702,6 +689,8 @@ function toggleVehicleType(item) {
 }
 
 function toggleSelectAll() {
+  if (props.isComparisonPreview) return;
+
   toggleResearchableSelectAll({
     tree_data,
     selected_state_map,
@@ -722,19 +711,7 @@ function clearCache() {
   emit("clear");
 }
 
-// 跳转至算法工作原理
-function openDoc() {
-  // window.open("https://blind-thunder.wiki/#/doc", "_blank");
-  // window.open(
-  //   "https://icnv6yvo8yvw.feishu.cn/docx/TBKFd623mowK9pxwGj5cwiRenwh?from=from_copylink",
-  //   "_blank",
-  // );
-  window.open(
-    "https://icnv6yvo8yvw.feishu.cn/docx/Sx1sdwhsPoSKzaxUCeZcaXo9nvg?from=from_copylink",
-    "_blank",
-  );
-}
-
+const sponsor_visible = ref(false);
 const plan_visible = ref(false);
 </script>
 
@@ -801,11 +778,11 @@ const plan_visible = ref(false);
   border-bottom: 3px solid transparent;
   transition: 0.2s;
   user-select: none;
-  padding: 8px 16px 5px;
+  padding: 8px 14px 5px;
   border-radius: 10px;
 }
 .type-tab-item.active {
-  background: #202733;
+  background: #383f4d;
 }
 .bottom-line {
   width: 100%;

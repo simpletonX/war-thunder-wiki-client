@@ -9,6 +9,7 @@ export function toggleSelectColumnAbove({
   tree_data,
   clicked_item,
   selected_state_map,
+  isPremium = false,
 }) {
   if (!Array.isArray(tree_data.value) || !clicked_item) return;
 
@@ -29,8 +30,10 @@ export function toggleSelectColumnAbove({
   // =========================
   let pos = null;
 
+  const vehicleGroup = isPremium ? "premium_vehicles" : "researchable_vehicles";
+
   for (let r = 0; r < tree_data.value.length && !pos; r++) {
-    const cols = tree_data.value[r].researchable_vehicles;
+    const cols = tree_data.value[r][vehicleGroup];
     if (!Array.isArray(cols)) continue;
 
     for (let c = 0; c < cols.length && !pos; c++) {
@@ -87,7 +90,7 @@ export function toggleSelectColumnAbove({
   // ④ 同列向上逻辑（核心）
   // =========================
   for (let r = 0; r <= targetRank; r++) {
-    const col = tree_data.value[r].researchable_vehicles?.[targetCol];
+    const col = tree_data.value[r][vehicleGroup]?.[targetCol];
     if (!Array.isArray(col)) continue;
 
     const itemEnd = r < targetRank ? col.length - 1 : targetItem;
@@ -557,10 +560,12 @@ export function getColumnBoundaryVehicles(tree_data) {
         lastFound = item;
       } else if (item.type === "multiple") {
         const lastSubItem = item.items?.[item.items.length - 1];
-
-        // 部分折叠组的末项没有有效 BR，不能作为列末端展示载具。
-        // 此时回退到该折叠组的第一个载具。
-        lastFound = lastSubItem?.br == null ? item.items?.[0] : lastSubItem;
+        // 末项没有有效 BR 的折叠载具会退到该折叠组的第一个载具。
+        if (lastSubItem?.br) {
+          lastFound = lastSubItem;
+        } else {
+          lastFound = item.items?.[0];
+        }
       }
 
       if (lastFound) break;
@@ -739,6 +744,7 @@ function normalizePlanResult({
   targetIds,
   ownedResearchIds = [],
   selectedStateMapRef,
+  commitResult = true,
 }) {
   const nextSelectedMap = {};
   const ownedIdSet = new Set(ownedResearchIds);
@@ -757,7 +763,11 @@ function normalizePlanResult({
     nextSelectedMap[id] = true;
   }
 
-  selectedStateMapRef.value = nextSelectedMap;
+  // 对比列表需要获取一份独立的规划快照。此时只返回结果，不写入
+  // 当前科技树的选中状态，也不触碰本地缓存。
+  if (commitResult && selectedStateMapRef) {
+    selectedStateMapRef.value = nextSelectedMap;
+  }
 
   return {
     ok: plan.ok,
@@ -765,22 +775,22 @@ function normalizePlanResult({
     research_ids: plan.selectedIds || [],
     premium_ids: plan.premiumIds || [],
     target_ids: targetIds,
+    waypoint_ids: plan.waypointIds || [],
     total_rp: plan.totalRp || 0,
     total_sp: plan.totalSp || 0,
     rank_counts: plan.rankCounts || [],
     by_rank: collectSelectedByRank(treeData, nextSelectedMap),
     warnings: plan.warnings || [],
-    mode: plan.mode,
-    priority_score: plan.priorityScore || 0,
     search_complete: plan.searchComplete !== false,
   };
 }
 export function findShortestPathToVehicle({
   targets = [],
+  waypoints = [],
   planned_prems = [],
   owned_researchables = [],
-  priority_column = [],
   ignore_multiple = false,
+  commitResult = true,
 } = {}) {
   const treeDataStore = useTreeDataStore();
   const { tree_data, selected_state_map, types } = storeToRefs(treeDataStore);
@@ -792,13 +802,16 @@ export function findShortestPathToVehicle({
       : Object.keys(selected_state_map.value || {}).filter(
           (id) => selected_state_map.value[id],
         );
+  const waypointIds = waypoints.map(normalizeVehicleId).filter(Boolean);
   const plannedPremiumIds = planned_prems
     .map(normalizeVehicleId)
     .filter(Boolean);
   const ownedResearchIds = owned_researchables
     .map(normalizeVehicleId)
     .filter(Boolean);
-  treeDataStore.updateOwnedVehicleIds(ownedResearchIds);
+  if (commitResult) {
+    treeDataStore.updateOwnedVehicleIds(ownedResearchIds);
+  }
 
   const plan = planShortestResearchPath({
     treeData,
@@ -812,7 +825,7 @@ export function findShortestPathToVehicle({
     terminalVehicles: terminal_vehicles,
     countryCode: types.value.country_code,
     vehicleType: types.value.vehicle_type,
-    priorityColumns: priority_column,
+    waypointIds,
     ignoreMultiple: ignore_multiple,
   });
 
@@ -822,14 +835,16 @@ export function findShortestPathToVehicle({
     targetIds,
     ownedResearchIds,
     selectedStateMapRef: selected_state_map,
+    commitResult,
   });
 }
 export async function findShortestPathToVehicleWorker({
   targets = [],
+  waypoints = [],
   planned_prems = [],
   owned_researchables = [],
-  priority_column = [],
   ignore_multiple = false,
+  commitResult = true,
 } = {}) {
   const treeDataStore = useTreeDataStore();
   const { tree_data, selected_state_map, types } = storeToRefs(treeDataStore);
@@ -841,23 +856,27 @@ export async function findShortestPathToVehicleWorker({
       : Object.keys(selected_state_map.value || {}).filter(
           (id) => selected_state_map.value[id],
         );
+  const waypointIds = waypoints.map(normalizeVehicleId).filter(Boolean);
   const plannedPremiumIds = planned_prems
     .map(normalizeVehicleId)
     .filter(Boolean);
   const ownedResearchIds = owned_researchables
     .map(normalizeVehicleId)
     .filter(Boolean);
-  treeDataStore.updateOwnedVehicleIds(ownedResearchIds);
+  if (commitResult) {
+    treeDataStore.updateOwnedVehicleIds(ownedResearchIds);
+  }
 
   const worker = createResearchPathWorker();
 
   if (!worker) {
     return findShortestPathToVehicle({
       targets,
+      waypoints,
       planned_prems,
       owned_researchables,
-      priority_column,
       ignore_multiple,
+      commitResult,
     });
   }
 
@@ -878,7 +897,7 @@ export async function findShortestPathToVehicleWorker({
         terminalVehicles: terminal_vehicles,
         countryCode: types.value.country_code,
         vehicleType: types.value.vehicle_type,
-        priorityColumns: priority_column,
+        waypointIds,
         ignoreMultiple: ignore_multiple,
       },
     });
@@ -890,6 +909,7 @@ export async function findShortestPathToVehicleWorker({
     targetIds,
     ownedResearchIds,
     selectedStateMapRef: selected_state_map,
+    commitResult,
   });
 }
 /** researchPathPlanner/Path Worker相关 */

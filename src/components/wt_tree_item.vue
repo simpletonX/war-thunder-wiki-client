@@ -5,7 +5,7 @@
       class="wt-tree-item w-[156px] h-[56px]"
       :class="{
         true_select_mode:
-          !selected_state_map[item.data_unit_id] &&
+          !displaySelectedStateMap[item.data_unit_id] &&
           !isPremium &&
           settings.true_tree_mode,
         default_select_mode: !settings.true_tree_mode,
@@ -15,6 +15,11 @@
           targetVehicleIds.has(item.data_unit_id) ||
           item.items?.some((subItem) =>
             targetVehicleIds.has(subItem.data_unit_id),
+          ),
+        planning_waypoint:
+          waypointVehicleIds.has(item.data_unit_id) ||
+          item.items?.some((subItem) =>
+            waypointVehicleIds.has(subItem.data_unit_id),
           ),
         mark_owned:
           ownedVehicleIds.has(item.data_unit_id) ||
@@ -32,7 +37,8 @@
     >
       <div
         class="inner-click-mask cursor-pointer absolute w-full h-full top-0 left-0"
-        @click="clickTrigger(item)"
+        @mousedown.left="triggerShortcut($event, item)"
+        @click="clickTrigger($event, item)"
       >
         <div class="icon absolute bottom-[3px] left-[2px]">
           <img :src="item.vehicle_icon" loading="lazy" v-fade-image />
@@ -110,6 +116,9 @@
 
         <!-- 被视为规划目标时的额外标识 -->
         <div class="target_mark">目标载具</div>
+
+        <!-- 被视为规划途径点时的额外标识 -->
+        <div class="waypoint_mark">途径点</div>
 
         <!-- 自动规划基线中已拥有载具的额外标识 -->
         <div class="owned_mark" v-if="!isPremium">已拥有</div>
@@ -237,7 +246,8 @@
       <!-- 隐藏载具标识 -->
       <div
         class="hidden_mark absolute w-full h-full top-0 left-0 overflow-hidden cursor-pointer"
-        @click.prevent.stop="clickTrigger(item)"
+        @mousedown.left.stop="triggerShortcut($event, item)"
+        @click.prevent.stop="clickTrigger($event, item)"
         v-if="checkItemPurchaseVisible(item, isPremium)"
       >
         <div class="ribbon"></div>
@@ -253,18 +263,20 @@
             v-for="(subItem, subIndex) in item.items"
             :class="{
               true_select_mode:
-                !selected_state_map[subItem.data_unit_id] &&
+                !displaySelectedStateMap[subItem.data_unit_id] &&
                 !isPremium &&
                 settings.true_tree_mode,
               default_select_mode: !settings.true_tree_mode,
               unactive_mode: totalSelectNum,
-              selected: selected_state_map[subItem.data_unit_id],
+              selected: displaySelectedStateMap[subItem.data_unit_id],
               planning_target: targetVehicleIds.has(subItem.data_unit_id),
+              planning_waypoint: waypointVehicleIds.has(subItem.data_unit_id),
               mark_owned: ownedVehicleIds.has(subItem.data_unit_id),
               single_item: subItem.type == 'single',
               [subItem.class_name || 'default']: true,
             }"
-            @click="clickTrigger(subItem)"
+            @mousedown.left="triggerShortcut($event, subItem)"
+            @click="clickTrigger($event, subItem)"
             @contextmenu.prevent.stop="openFastFuncs($event, subItem)"
           >
             <div class="icon absolute bottom-[3px] left-[2px]">
@@ -330,13 +342,17 @@
             <!-- 被视为规划目标时的额外标识 -->
             <div class="target_mark">目标载具</div>
 
+            <!-- 被视为规划途径点时的额外标识 -->
+            <div class="waypoint_mark">途径点</div>
+
             <!-- 自动规划基线中已拥有载具的额外标识 -->
             <div class="owned_mark" v-if="!isPremium">已拥有</div>
 
             <!-- 隐藏载具标识 -->
             <div
               class="hidden_mark absolute w-full h-full top-0 left-0 overflow-hidden cursor-pointer"
-              @click.prevent.stop="clickTrigger(subItem)"
+              @mousedown.left.stop="triggerShortcut($event, subItem)"
+              @click.prevent.stop="clickTrigger($event, subItem)"
               v-if="checkItemPurchaseVisible(subItem, isPremium)"
             >
               <div class="ribbon"></div>
@@ -373,10 +389,20 @@ const props = defineProps({
   arrow_points: { type: Object, required: false },
   // 自动规划 targets 中的载具 ID
   targetVehicleIds: { type: Set, default: () => new Set() },
+  // 自动规划时必须经过的可研发载具 ID
+  waypointVehicleIds: { type: Set, default: () => new Set() },
+  // 当前设备是否使用 macOS 快捷键方案
+  isMacOS: { type: Boolean, default: false },
+  // Windows 下用于识别 Tab + 鼠标左键
+  isTabKeyPressed: { type: Boolean, default: false },
   // 自动规划时作为已拥有基线的可研发载具 ID
   ownedVehicleIds: { type: Set, default: () => new Set() },
+  // 对比预览时使用独立的选中状态快照，不写回当前科技树状态。
+  displaySelectedStateMap: { type: Object, default: null },
+  // 预览对比结果时禁止直接修改原本的手动选择。
+  isComparisonPreview: { type: Boolean, default: false },
 });
-const emit = defineEmits(["open-fast-funcs"]);
+const emit = defineEmits(["open-fast-funcs", "shortcut-action"]);
 
 const treeDataStore = useTreeDataStore();
 const { settings, selected_state_map, types } =
@@ -387,8 +413,11 @@ const is_terminal = computed(
       props.item.data_unit_id
     ],
 );
+const displaySelectedStateMap = computed(
+  () => props.displaySelectedStateMap || selected_state_map.value,
+);
 const totalSelectNum = computed(
-  () => !!Object.keys(selected_state_map.value).length,
+  () => !!Object.keys(displaySelectedStateMap.value).length,
 );
 
 const public_mask = usePublicMaskStore();
@@ -398,13 +427,13 @@ const showStatus = ref(false);
 function isItemSelected(item) {
   // single：直接查 map
   if (item.type === "single") {
-    return !!selected_state_map.value[item.data_unit_id];
+    return !!displaySelectedStateMap.value[item.data_unit_id];
   }
 
   // multiple：判断 group 逻辑
   if (item.type === "multiple") {
     return item.items.some(
-      (child) => selected_state_map.value[child.data_unit_id],
+      (child) => displaySelectedStateMap.value[child.data_unit_id],
     );
   }
 
@@ -413,14 +442,14 @@ function isItemSelected(item) {
 // 获取当前选中的二级折叠载具
 const current_select_items = ref([]);
 watch(
-  selected_state_map,
+  displaySelectedStateMap,
   () => {
     if (props.item.type == "single") {
       return [];
     } else {
       const items = props.item?.items || [];
       current_select_items.value = items.filter(
-        (item) => selected_state_map.value[item.data_unit_id],
+        (item) => displaySelectedStateMap.value[item.data_unit_id],
       );
     }
   },
@@ -453,8 +482,49 @@ const total_selected_items_stats = computed(() => {
   return result;
 });
 
+let skipNextClick = false;
+
+function getShortcutAction(event, item) {
+  if (item?.type === "multiple") return null;
+  if (event.shiftKey) return "automatic-planning";
+
+  if (props.isMacOS) {
+    if (event.metaKey) return "quick-planning";
+    if (event.altKey) return "set-target";
+    if (event.ctrlKey) return "set-waypoint";
+    return null;
+  }
+
+  if (event.ctrlKey) return "quick-planning";
+  if (event.altKey) return "set-target";
+  if (props.isTabKeyPressed) return "set-waypoint";
+  return null;
+}
+
+function triggerShortcut(event, item) {
+  if (props.isComparisonPreview) return;
+
+  const action = getShortcutAction(event, item);
+  if (!action) return;
+
+  skipNextClick = true;
+  window.setTimeout(() => {
+    skipNextClick = false;
+  }, 0);
+  event.preventDefault();
+  event.stopPropagation();
+  emit("shortcut-action", { action, item, isPremium: props.isPremium });
+}
+
 // 点击item时更新选中状态策略
-function clickTrigger(item) {
+function clickTrigger(event, item) {
+  if (props.isComparisonPreview) return;
+
+  if (skipNextClick) {
+    skipNextClick = false;
+    return;
+  }
+
   if (item.type == "multiple") {
     // settings.multiple_mode: true -> 选中/反选其下第一个折叠载具
     if (settings.value.multiple_mode) {
@@ -534,6 +604,7 @@ function openFastFuncs(event, target_item) {
     item: target_item,
     isPremium: props.isPremium,
     colIndex: props.colIndex,
+    isComparisonPreview: props.isComparisonPreview,
     anchorRect: {
       top: rect.top,
       right: rect.right,
@@ -719,15 +790,20 @@ function openFastFuncs(event, target_item) {
 .arrow-tip {
   border-left: 7px solid transparent;
   border-right: 7px solid transparent;
-  border-top: 6px solid #6a8082;
+  border-top: 7px solid #6a8082;
+}
+.wt-tree-item.true_select_mode:not(.selected) .arrow-tip {
+  border-top: 7px solid var(--true_mode_item_arrow);
 }
 .arrow-tip.tip-right {
   border-top: 7px solid transparent;
   border-bottom: 7px solid transparent;
-  border-left: 6px solid #6a8082;
+  border-left: 7px solid #6a8082;
 }
-.wt-tree-item.true_select_mode:not(.selected) .arrow-tip {
-  border-top: 6px solid var(--true_mode_item_arrow);
+.wt-tree-item.true_select_mode:not(.selected) .tip-right {
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 7px solid var(--true_mode_item_arrow);
 }
 .wt-tree-item.true_select_mode:not(.selected) {
   background-color: var(--true_mode_item_bgc);
@@ -752,6 +828,19 @@ function openFastFuncs(event, target_item) {
   padding: 2px 5px 0;
 }
 .wt-tree-item.planning_target .target_mark {
+  display: block;
+}
+.waypoint_mark {
+  display: none;
+  position: absolute;
+  top: -24px;
+  right: -1px;
+  background-color: #247b9b;
+  font-size: 12px;
+  line-height: 22px;
+  padding: 2px 5px 0;
+}
+.wt-tree-item.planning_waypoint .waypoint_mark {
   display: block;
 }
 .owned_mark {

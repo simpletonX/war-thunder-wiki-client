@@ -52,13 +52,36 @@
       @automatic-calculate="openAutomaticCalc"
       @exportImage="exportImage"
       @update:totals="handleTotals"
-      @openUpdateLog="() => (notice_visible = true)"
+      :comparisonTotalStats="activeComparisonTotalStats"
+      :isComparisonPreview="isComparisonPreview"
     />
 
     <!-- 科技树主体 -->
     <div class="wt-tree w-[1350px] mx-auto relative" ref="wt_tree">
       <!-- 遮罩层，解决因backdrop-filter带来的包含块对fixed定位的影响 -->
       <div class="backdrop-filter"></div>
+
+      <!-- 路线对比仅切换显示快照，不会覆盖当前科技树的手动选择。 -->
+      <div v-if="comparisonPlans.length" class="comparison-tabs-bar">
+        <span class="comparison-tabs-title">路线对比列表</span>
+        <div class="comparison-tabs-scroll">
+          <cir_tabs
+            v-model="activeComparisonId"
+            :options="comparisonTabOptions"
+            name="research-path-comparison"
+            aria-label="路线对比方案"
+            @remove="removeComparisonPlan"
+          />
+        </div>
+        <button
+          type="button"
+          class="comparison-tabs-clear flex items-center"
+          @click="clearComparisonPlans"
+        >
+          <PhArrowUUpLeft :size="18" />
+          <span class="ml-1">清空列表</span>
+        </button>
+      </div>
 
       <div class="tree-area pb-[100px] pt-[22px]" v-if="tree_data?.length">
         <!-- 每个等级 -->
@@ -80,15 +103,21 @@
               <div class="flex rank-sprps text-[13px] ml-4">
                 <span class="rps">{{
                   settings.math_format == "thousands_separator"
-                    ? parseNumber(rankStats[rankItem.rank]?.rp, true)
-                    : formatChineseNumber(rankStats[rankItem.rank]?.rp, true)
+                    ? parseNumber(activeRankStats[rankItem.rank]?.rp, true)
+                    : formatChineseNumber(
+                        activeRankStats[rankItem.rank]?.rp,
+                        true,
+                      )
                 }}</span>
                 <img :src="`/static/rp.png`" class="w-[16px] mr-1" />
                 <span>/</span>
                 <span class="sps ml-2">{{
                   settings.math_format == "thousands_separator"
-                    ? parseNumber(rankStats[rankItem.rank]?.sp, true)
-                    : formatChineseNumber(rankStats[rankItem.rank]?.sp, true)
+                    ? parseNumber(activeRankStats[rankItem.rank]?.sp, true)
+                    : formatChineseNumber(
+                        activeRankStats[rankItem.rank]?.sp,
+                        true,
+                      )
                 }}</span>
                 <img :src="`/static/war-points.png`" class="w-[18px]" />
               </div>
@@ -100,9 +129,9 @@
             class="unlock-quantity absolute top-[calc(50%-15px)] left-[8px] text-[12px] w-[30px] h-[30px] bg-[rgba(255,255,255,.05)] rounded-full flex justify-center items-center text-[rgba(255,255,255,.75)]"
           >
             {{
-              rankStats[rankItem.rank]?.count > current_uq[rankItem.rank]
+              activeRankStats[rankItem.rank]?.count > current_uq[rankItem.rank]
                 ? current_uq[rankItem.rank]
-                : rankStats[rankItem.rank]?.count
+                : activeRankStats[rankItem.rank]?.count
             }}/{{ current_uq[rankItem.rank] }}
           </div>
           <div class="wt-tree-instance pr-4 pl-12 flex justify-between">
@@ -125,8 +154,14 @@
                   :currentPointsType="currentPointsType"
                   :arrow_points="arrow_points_map[item.data_unit_id]"
                   :targetVehicleIds="targetVehicleIds"
-                  :ownedVehicleIds="ownedVehicleIds"
+                  :waypointVehicleIds="waypointVehicleIds"
+                  :isMacOS="isMacOS"
+                  :isTabKeyPressed="isTabKeyPressed"
+                  :ownedVehicleIds="activeOwnedVehicleIds"
+                  :displaySelectedStateMap="activeSelectedStateMap"
+                  :isComparisonPreview="isComparisonPreview"
                   @open-fast-funcs="openFastFuncs"
+                  @shortcut-action="handleVehicleShortcut"
                 />
                 <!-- 如果 columnItem 为空数组依旧会渲染占位列（无 item） -->
               </div>
@@ -149,8 +184,14 @@
                   :currentPointsType="currentPointsType"
                   :arrow_points="arrow_points_map[item.data_unit_id]"
                   :targetVehicleIds="targetVehicleIds"
-                  :ownedVehicleIds="ownedVehicleIds"
+                  :waypointVehicleIds="waypointVehicleIds"
+                  :isMacOS="isMacOS"
+                  :isTabKeyPressed="isTabKeyPressed"
+                  :ownedVehicleIds="activeOwnedVehicleIds"
+                  :displaySelectedStateMap="activeSelectedStateMap"
+                  :isComparisonPreview="isComparisonPreview"
                   @open-fast-funcs="openFastFuncs"
+                  @shortcut-action="handleVehicleShortcut"
                 />
               </div>
             </div>
@@ -231,13 +272,8 @@
     class="fixed bottom-2 left-[46px] text-white flex justify-center items-center text-[11px] opacity-60 w-full"
   >
     <img :src="`/static/database-network.svg`" />
-    <a
-      href="https://warthunder.com/zh/game/changelog/current/675"
-      target="_blank"
-      class="ml-2 pt-[4px]"
-      >当前数据库对应的游戏版本号：{{ db_version }}</a
-    >
-    <span class="ml-3 pt-[4px]">更新于 {{ db_update_date }}</span>
+    <span class="pt-[4px] ml-1">游戏版本号：{{ db_version }}</span>
+    <span class="ml-3 pt-[4px]">/ 更新日期 {{ db_update_date }}</span>
   </div>
 
   <!-- 恢复自动计算前的手动选择状态 -->
@@ -266,8 +302,17 @@
     :anchorRect="fastFuncsState.anchorRect"
     :showAsTarget="showFastAsTarget"
     :isTarget="currentFastIsTarget"
+    :showQuickPlanning="showFastQuickPlanning"
+    :showAddToComparison="showFastAddToComparison"
+    :showAsWaypoint="showFastAsWaypoint"
+    :isWaypoint="currentFastIsWaypoint"
+    :isMacOS="isMacOS"
+    :isComparisonPreview="fastFuncsState.isComparisonPreview"
     @automatic-planning="handleFastAutomaticPlanning"
+    @quick-planning="handleFastQuickPlanning"
+    @add-to-comparison="handleFastAddToComparison"
     @set-target="handleFastSetTarget"
+    @set-waypoint="handleFastSetWaypoint"
     @jump-details="handleFastJumpDetails"
     @close="closeFastFuncs"
   />
@@ -282,13 +327,10 @@
   <!-- 开发调试信息 -->
   <development_debug_panel v-if="settings.developer_mode" ref="debugPanelRef" />
 
-  <!-- 自动计算列偏好、策略模式选择dialog -->
+  <!-- 自动计算选项对话框 -->
   <automatic_options
     v-model="automatic_options_visible"
-    v-model:priorityList="priorityList"
     v-model:ignore_multiple="ignore_multiple"
-    :priorityVehicleList="priorityVehicleList"
-    :ignoreColumns="ignoreColumns"
     @automatic-calculate="runAutomaticPlanning"
   ></automatic_options>
 
@@ -300,6 +342,14 @@
     @close="updateAgreementAccepted"
     v-if="!agreement_accepted?.read"
   ></user_agreement>
+
+  <!-- 右侧全局定位功能按钮 -->
+  <div class="func-button-bar fixed right-0">
+    <div class="func-button" @click="() => (notice_visible = true)">
+      更新日志
+    </div>
+    <div class="func-button" @click="jumpUserAgreement">用户协议</div>
+  </div>
 </template>
 
 <script setup>
@@ -310,12 +360,12 @@ import {
   onMounted,
   onUnmounted,
   ref,
-  toRaw,
   watch,
 } from "vue";
 import wt_tree_item from "@/components/wt_tree_item.vue";
 import wt_country_tabs from "@/components/wt_country_tabs.vue";
 import wt_type_tabs from "@/components/wt_type_tabs.vue";
+import cir_tabs from "@/components/cir_tabs.vue";
 import public_mask from "@/components/public_mask.vue";
 import { useTreeDataStore } from "@/stores/tree_data_store";
 import { getStorage, setStorage } from "@/utils/storage";
@@ -325,9 +375,9 @@ import {
   createArrowPointsMap,
   createResearchableSet,
   createVehicleCostMap,
+  calculateRankStats,
   findShortestPathToVehicleWorker,
   formatChineseNumber,
-  getColumnBoundaryVehicles,
   parseNumber,
   toggleSelectColumnAbove,
 } from "@/utils/treeDataUtils";
@@ -345,6 +395,7 @@ import wt_tree_item_fast_funcs from "@/components/wt_tree_item_fast_funcs.vue";
 import {
   PhArrowCounterClockwise,
   PhMagnifyingGlass,
+  PhArrowUUpLeft,
 } from "@phosphor-icons/vue";
 import User_agreement from "@/components/user_agreement.vue";
 import { country_icons } from "@/utils/icon_svgs";
@@ -375,6 +426,7 @@ const {
   settings,
   types,
   rankStats,
+  vehicle_cost_map: vehicleCostMap,
   loading_visible,
   selected_state_map,
   owned_vehicle_ids: ownedVehicleIds,
@@ -382,6 +434,172 @@ const {
 } = storeToRefs(treeDataStore);
 
 const targetVehicleIds = ref(new Set());
+const waypointVehicleIds = ref(new Set());
+const COMPARISON_PLANS_STORAGE_KEY = "research_path_comparison_plans_v1";
+const MAX_COMPARISON_PLANS = 10;
+
+function normalizeComparisonPlans(value) {
+  if (!Array.isArray(value)) return [];
+
+  const planIds = new Set();
+  return value
+    .filter((plan) => {
+      if (
+        !plan ||
+        typeof plan.id !== "string" ||
+        typeof plan.countryCode !== "string" ||
+        typeof plan.vehicleType !== "string" ||
+        !plan.selectedStateMap ||
+        typeof plan.selectedStateMap !== "object" ||
+        planIds.has(plan.id)
+      ) {
+        return false;
+      }
+
+      planIds.add(plan.id);
+      return true;
+    })
+    .map((plan) => ({
+      id: plan.id,
+      title: typeof plan.title === "string" ? plan.title : plan.id,
+      vehicleId: typeof plan.vehicleId === "string" ? plan.vehicleId : "",
+      vehicleIcon: typeof plan.vehicleIcon === "string" ? plan.vehicleIcon : "",
+      countryCode: plan.countryCode,
+      vehicleType: plan.vehicleType,
+      treeKey:
+        typeof plan.treeKey === "string"
+          ? plan.treeKey
+          : `${plan.countryCode}_${plan.vehicleType}`,
+      selectedStateMap: { ...plan.selectedStateMap },
+      ownedResearchIds: Array.isArray(plan.ownedResearchIds)
+        ? plan.ownedResearchIds.filter((id) => typeof id === "string")
+        : [],
+    }))
+    .slice(0, MAX_COMPARISON_PLANS);
+}
+
+const comparisonPlans = ref(
+  getStorage(COMPARISON_PLANS_STORAGE_KEY, [], normalizeComparisonPlans),
+);
+function persistComparisonPlans() {
+  setStorage(COMPARISON_PLANS_STORAGE_KEY, comparisonPlans.value);
+}
+function getComparisonVehicleId(plan) {
+  if (plan.vehicleId) return plan.vehicleId;
+
+  const prefix = `${plan.treeKey}_`;
+  return plan.id.startsWith(prefix) ? plan.id.slice(prefix.length) : "";
+}
+function findTreeVehicle(treeData, vehicleId) {
+  for (const rank of treeData || []) {
+    for (const column of rank.researchable_vehicles || []) {
+      for (const item of column || []) {
+        const items = item?.type === "multiple" ? item.items : [item];
+        const vehicle = (items || []).find(
+          (entry) => entry?.data_unit_id === vehicleId,
+        );
+        if (vehicle) return vehicle;
+      }
+    }
+  }
+  return null;
+}
+function hydrateComparisonIcons(treeData, treeKey) {
+  let hasChanges = false;
+  comparisonPlans.value = comparisonPlans.value.map((plan) => {
+    if (plan.treeKey !== treeKey || plan.vehicleIcon) return plan;
+
+    const vehicleId = getComparisonVehicleId(plan);
+    const vehicle = findTreeVehicle(treeData, vehicleId);
+    if (!vehicle?.vehicle_icon) return plan;
+
+    hasChanges = true;
+    return {
+      ...plan,
+      vehicleId,
+      vehicleIcon: vehicle.vehicle_icon,
+    };
+  });
+  if (hasChanges) persistComparisonPlans();
+}
+const activeComparisonId = ref("current");
+const comparisonTabOptions = computed(() => [
+  { id: "current", title: "当前选择" },
+  ...comparisonPlans.value.map((plan) => ({
+    id: plan.id,
+    title: plan.title,
+    icon: plan.vehicleIcon,
+    removable: true,
+  })),
+]);
+const activeComparisonPlan = computed(() =>
+  comparisonPlans.value.find((plan) => plan.id === activeComparisonId.value),
+);
+const isComparisonPreview = computed(() => !!activeComparisonPlan.value);
+const activeSelectedStateMap = computed(
+  () =>
+    activeComparisonPlan.value?.selectedStateMap || selected_state_map.value,
+);
+const activeOwnedVehicleIds = computed(() =>
+  activeComparisonPlan.value
+    ? new Set(activeComparisonPlan.value.ownedResearchIds)
+    : ownedVehicleIds.value,
+);
+const activeRankStats = computed(() =>
+  isComparisonPreview.value
+    ? calculateRankStats(activeSelectedStateMap.value, vehicleCostMap.value)
+    : rankStats.value,
+);
+function calculateComparisonTotals(selectedStateMap, excludeOwned = false) {
+  const totals = { rp: 0, sp: 0, count: 0 };
+
+  for (const [id, isSelected] of Object.entries(selectedStateMap || {})) {
+    if (!isSelected) continue;
+
+    const vehicle = vehicleCostMap.value[id];
+    if (!vehicle) continue;
+    if (
+      !vehicle.isPremium &&
+      (!excludeOwned || !activeOwnedVehicleIds.value.has(id))
+    ) {
+      totals.rp += vehicle.rp;
+      totals.sp += vehicle.sp;
+    }
+    totals.count++;
+  }
+
+  return totals;
+}
+const activeComparisonTotalStats = computed(() => {
+  if (!isComparisonPreview.value) return null;
+
+  return {
+    complete: calculateComparisonTotals(activeSelectedStateMap.value),
+    pending: calculateComparisonTotals(activeSelectedStateMap.value, true),
+  };
+});
+
+watch(activeComparisonId, (comparisonId) => {
+  const plan = comparisonPlans.value.find((entry) => entry.id === comparisonId);
+  if (!plan) return;
+
+  if (
+    types.value.country_code !== plan.countryCode ||
+    types.value.vehicle_type !== plan.vehicleType
+  ) {
+    // 使用一次性更新避免跨国家、跨军种时产生中间请求。
+    updateTypes({
+      country_code: plan.countryCode,
+      vehicle_type: plan.vehicleType,
+    });
+  }
+});
+const isMacOS = /Mac|iPhone|iPad|iPod/i.test(
+  typeof navigator === "undefined"
+    ? ""
+    : navigator.userAgentData?.platform || navigator.platform || "",
+);
+const isTabKeyPressed = ref(false);
 const debugPanelRef = ref(null);
 const fastFuncsState = ref({
   visible: false,
@@ -496,7 +714,7 @@ const version = import.meta.env.VITE_APP_VERSION;
 const showFastAsTarget = computed(() => {
   const { item, isPremium } = fastFuncsState.value;
   return (
-    !(['helicopters'].includes(types.value.vehicle_type)) &&
+    !["helicopters"].includes(types.value.vehicle_type) &&
     !isPremium &&
     !!item?.data_unit_id &&
     !selected_state_map.value[item.data_unit_id]
@@ -506,6 +724,36 @@ const currentFastIsTarget = computed(() => {
   const item = fastFuncsState.value.item;
   return getFastItemVehicleIds(item).some((id) =>
     targetVehicleIds.value.has(id),
+  );
+});
+const showFastAsWaypoint = showFastAsTarget;
+const showFastQuickPlanning = computed(() => {
+  const { item, isPremium } = fastFuncsState.value;
+  return (
+    !isPremium &&
+    !!item?.data_unit_id &&
+    !selected_state_map.value[item.data_unit_id]
+  );
+});
+const showFastAddToComparison = computed(() => {
+  const { item, isPremium } = fastFuncsState.value;
+  const planId = item?.data_unit_id
+    ? `${types.value.country_code}_${types.value.vehicle_type}_${item.data_unit_id}`
+    : "";
+  const isAlreadyCompared = comparisonPlans.value.some(
+    (plan) => plan.id === planId,
+  );
+  return (
+    !isPremium &&
+    !!item?.data_unit_id &&
+    !selected_state_map.value[item.data_unit_id] &&
+    (isAlreadyCompared || comparisonPlans.value.length < MAX_COMPARISON_PLANS)
+  );
+});
+const currentFastIsWaypoint = computed(() => {
+  const item = fastFuncsState.value.item;
+  return getFastItemVehicleIds(item).some((id) =>
+    waypointVehicleIds.value.has(id),
   );
 });
 
@@ -526,6 +774,12 @@ watch(
     if (remainingTargets.length !== targetVehicleIds.value.size) {
       targetVehicleIds.value = new Set(remainingTargets);
     }
+    const remainingWaypoints = [...waypointVehicleIds.value].filter(
+      (id) => !selected?.[id],
+    );
+    if (remainingWaypoints.length !== waypointVehicleIds.value.size) {
+      waypointVehicleIds.value = new Set(remainingWaypoints);
+    }
   },
   { deep: true },
 );
@@ -538,15 +792,158 @@ function closeFastFuncs() {
   fastFuncsState.value.visible = false;
 }
 
+async function handleVehicleShortcut({ action, item, isPremium }) {
+  if (!item?.data_unit_id) return;
+
+  const isPlanningMarkerUnavailable =
+    isPremium ||
+    types.value.vehicle_type === "helicopters" ||
+    selected_state_map.value[item.data_unit_id];
+  if (
+    (action === "set-target" || action === "set-waypoint") &&
+    isPlanningMarkerUnavailable
+  ) {
+    return;
+  }
+  if (
+    action === "quick-planning" &&
+    (isPremium || selected_state_map.value[item.data_unit_id])
+  ) {
+    return;
+  }
+
+  fastFuncsState.value = {
+    ...fastFuncsState.value,
+    item,
+    isPremium,
+  };
+
+  if (action === "automatic-planning") handleFastAutomaticPlanning();
+  if (action === "quick-planning") await handleFastQuickPlanning();
+  if (action === "set-target") handleFastSetTarget();
+  if (action === "set-waypoint") handleFastSetWaypoint();
+}
+
 function handleFastAutomaticPlanning() {
-  const item = fastFuncsState.value.item;
+  const { item, isPremium } = fastFuncsState.value;
   if (!item) return;
 
   toggleSelectColumnAbove({
     tree_data,
     clicked_item: item,
     selected_state_map,
+    isPremium,
   });
+}
+
+async function handleFastQuickPlanning() {
+  const { item, isPremium } = fastFuncsState.value;
+  if (
+    isPremium ||
+    !item?.data_unit_id ||
+    selected_state_map.value[item.data_unit_id]
+  ) {
+    return;
+  }
+
+  const nextTargetIds = new Set(targetVehicleIds.value);
+  nextTargetIds.add(item.data_unit_id);
+  targetVehicleIds.value = nextTargetIds;
+
+  const nextWaypointIds = new Set(waypointVehicleIds.value);
+  nextWaypointIds.delete(item.data_unit_id);
+  waypointVehicleIds.value = nextWaypointIds;
+
+  await runAutomaticPlanning();
+}
+
+async function handleFastAddToComparison() {
+  const { item, isPremium } = fastFuncsState.value;
+  const planId = item?.data_unit_id
+    ? `${types.value.country_code}_${types.value.vehicle_type}_${item.data_unit_id}`
+    : "";
+  const existingIndex = comparisonPlans.value.findIndex(
+    (entry) => entry.id === planId,
+  );
+  if (
+    isPremium ||
+    !item?.data_unit_id ||
+    selected_state_map.value[item.data_unit_id]
+  ) {
+    return;
+  }
+  if (existingIndex === -1 && comparisonPlans.value.length >= MAX_COMPARISON_PLANS) {
+    alert(`路线对比最多只能保留 ${MAX_COMPARISON_PLANS} 条`);
+    return;
+  }
+
+  const { ownedResearchIds, plannedPremiumIds } =
+    collectSelectedPlanningVehicles();
+  const params = {
+    targets: [{ data_unit_id: item.data_unit_id }],
+    planned_prems: plannedPremiumIds.map((data_unit_id) => ({ data_unit_id })),
+    owned_researchables: ownedResearchIds.map((data_unit_id) => ({
+      data_unit_id,
+    })),
+    ignore_multiple: ignore_multiple.value,
+    // 对比规划只生成快照，绝不写入当前 selected_state_map 或本地缓存。
+    commitResult: false,
+  };
+
+  loading.show(400);
+  try {
+    const result = await findShortestPathToVehicleWorker(params);
+    if (!result?.ok) {
+      alert("该载具暂时无法生成可对比的最短研发路线");
+      return;
+    }
+
+    const plan = {
+      id: planId,
+      title:
+        item[settings.value.vehicle_title_type] ||
+        item.title ||
+        item.data_unit_id,
+      vehicleId: item.data_unit_id,
+      vehicleIcon: item.vehicle_icon || "",
+      countryCode: types.value.country_code,
+      vehicleType: types.value.vehicle_type,
+      treeKey: `${types.value.country_code}_${types.value.vehicle_type}`,
+      selectedStateMap: { ...result.selected_state_map },
+      ownedResearchIds: [...ownedResearchIds],
+    };
+    comparisonPlans.value =
+      existingIndex === -1
+        ? [...comparisonPlans.value, plan]
+        : comparisonPlans.value.map((entry, index) =>
+            index === existingIndex ? plan : entry,
+          );
+    persistComparisonPlans();
+    activeComparisonId.value = plan.id;
+  } catch {
+    alert("加入对比列表失败，请稍后再试");
+  } finally {
+    loading.hide();
+  }
+}
+
+function clearComparisonPlans() {
+  comparisonPlans.value = [];
+  persistComparisonPlans();
+  activeComparisonId.value = "current";
+  closeFastFuncs();
+}
+
+function removeComparisonPlan(plan) {
+  comparisonPlans.value = comparisonPlans.value.filter(
+    (entry) => entry.id !== plan.id,
+  );
+  persistComparisonPlans();
+
+  if (activeComparisonId.value === plan.id) {
+    activeComparisonId.value = "current";
+  }
+  closeFastFuncs();
 }
 
 function handleFastSetTarget() {
@@ -568,8 +965,33 @@ function handleFastSetTarget() {
     for (const id of existingTargetIds) nextTargetIds.delete(id);
   } else {
     nextTargetIds.add(item.data_unit_id);
+    const nextWaypointIds = new Set(waypointVehicleIds.value);
+    nextWaypointIds.delete(item.data_unit_id);
+    waypointVehicleIds.value = nextWaypointIds;
   }
   targetVehicleIds.value = nextTargetIds;
+}
+
+function handleFastSetWaypoint() {
+  const { item, isPremium } = fastFuncsState.value;
+  if (
+    isPremium ||
+    !item?.data_unit_id ||
+    selected_state_map.value[item.data_unit_id]
+  ) {
+    return;
+  }
+
+  const nextWaypointIds = new Set(waypointVehicleIds.value);
+  if (nextWaypointIds.has(item.data_unit_id)) {
+    nextWaypointIds.delete(item.data_unit_id);
+  } else {
+    nextWaypointIds.add(item.data_unit_id);
+    const nextTargetIds = new Set(targetVehicleIds.value);
+    nextTargetIds.delete(item.data_unit_id);
+    targetVehicleIds.value = nextTargetIds;
+  }
+  waypointVehicleIds.value = nextWaypointIds;
 }
 
 function handleFastJumpDetails() {
@@ -610,37 +1032,8 @@ function collectSelectedPlanningVehicles() {
 }
 
 const automatic_options_visible = ref(false);
-const priorityVehicleList = ref([]);
-const priorityList = ref([]);
 const ignore_multiple = ref(false);
 const automaticPlanningSnapshot = ref(null);
-const ignoreColumns = computed(() => {
-  const targets = targetVehicleIds.value;
-  const columns = new Set();
-
-  for (const rank of Array.isArray(tree_data.value) ? tree_data.value : []) {
-    for (const [columnIndex, column] of (
-      rank.researchable_vehicles || []
-    ).entries()) {
-      const containsTarget = (column || []).some((item) =>
-        getFastItemVehicleIds(item).some((id) => targets.has(id)),
-      );
-      if (containsTarget) columns.add(columnIndex);
-    }
-  }
-
-  return [...columns].sort((a, b) => a - b);
-});
-
-watch(ignoreColumns, (columns) => {
-  const ignored = new Set(columns);
-  const availablePriorities = priorityList.value.filter(
-    (columnIndex) => !ignored.has(columnIndex),
-  );
-  if (availablePriorities.length !== priorityList.value.length) {
-    priorityList.value = availablePriorities;
-  }
-});
 
 // 调用一键规划算法
 async function runAutomaticPlanning() {
@@ -656,13 +1049,13 @@ async function runAutomaticPlanning() {
     collectSelectedPlanningVehicles();
   const params = {
     targets: targetIds.map((data_unit_id) => ({ data_unit_id })),
+    waypoints: [...waypointVehicleIds.value].map((data_unit_id) => ({
+      data_unit_id,
+    })),
     planned_prems: plannedPremiumIds.map((data_unit_id) => ({ data_unit_id })),
     owned_researchables: ownedResearchIds.map((data_unit_id) => ({
       data_unit_id,
     })),
-    priority_column: toRaw(priorityList.value).filter(
-      (columnIndex) => !ignoreColumns.value.includes(columnIndex),
-    ),
     ignore_multiple: ignore_multiple.value,
   };
   const snapshot = {
@@ -686,6 +1079,7 @@ async function runAutomaticPlanning() {
     if (result.ok) {
       automaticPlanningSnapshot.value = snapshot;
       targetVehicleIds.value = new Set();
+      waypointVehicleIds.value = new Set();
     }
     loading.hide();
     automatic_options_visible.value = false;
@@ -710,6 +1104,7 @@ function rollbackAutomaticPlanning() {
   updateSelectedStateMapAllLocal({ ...snapshot.selectedStateMap }, true);
   updateOwnedVehicleIds([]);
   targetVehicleIds.value = new Set();
+  waypointVehicleIds.value = new Set();
   automaticPlanningSnapshot.value = null;
   closeFastFuncs();
 }
@@ -746,7 +1141,6 @@ function clearTreeDataRuntimeState(treeKey) {
   updateResearchableSet(new Set());
   updateVehicleCostMap({});
   arrow_points_map.value = {};
-  priorityVehicleList.value = [];
 }
 
 /** 请求tree_data数据 */
@@ -768,11 +1162,14 @@ async function requestTreeData() {
   };
   const requestedTreeKey = getTreeKey(requestedTypes);
 
-  // 清除列偏好数据
-  priorityList.value = [];
+  // 用户手动切换科技树时回到当前选择；由对比标签触发的切换则保留预览。
+  if (activeComparisonPlan.value?.treeKey !== requestedTreeKey) {
+    activeComparisonId.value = "current";
+  }
 
   automaticPlanningSnapshot.value = null;
   targetVehicleIds.value = new Set();
+  waypointVehicleIds.value = new Set();
   closeFastFuncs();
   clearTreeDataRuntimeState(requestedTreeKey);
   loading.show();
@@ -789,6 +1186,7 @@ async function requestTreeData() {
 
       // 更新tree_data到store
       updateTreeData(cleanedTreeData, requestedTreeKey);
+      hydrateComparisonIcons(cleanedTreeData, requestedTreeKey);
       // 创建Researchable集合
       updateResearchableSet(createResearchableSet(cleanedTreeData));
       // 创建指向箭头元数据映射（直升机除外）
@@ -799,9 +1197,6 @@ async function requestTreeData() {
       }
       // 创建RP/SP元数据映射
       updateVehicleCostMap(createVehicleCostMap(cleanedTreeData));
-      // 提取顶端/末端载具（priorityVehicleList）
-      priorityVehicleList.value = getColumnBoundaryVehicles(cleanedTreeData);
-
       hide_callback && hide_callback();
     });
   } catch (error) {
@@ -839,6 +1234,18 @@ function onGlobalClick() {
   closeFastFuncs();
 }
 
+function trackTabKeyDown(event) {
+  if (event.key === "Tab") isTabKeyPressed.value = true;
+}
+
+function trackTabKeyUp(event) {
+  if (event.key === "Tab") isTabKeyPressed.value = false;
+}
+
+function clearTabKeyState() {
+  isTabKeyPressed.value = false;
+}
+
 const notice_visible = ref(false);
 const notarget_alert_visible = ref(false);
 
@@ -848,6 +1255,14 @@ function openAutomaticCalc() {
     return;
   }
   automatic_options_visible.value = true;
+}
+
+// 跳转至用户协议
+function jumpUserAgreement() {
+  window.open(
+    "https://icnv6yvo8yvw.feishu.cn/docx/Sx1sdwhsPoSKzaxUCeZcaXo9nvg?from=from_copylink",
+    "_blank",
+  );
 }
 
 onMounted(() => {
@@ -866,9 +1281,15 @@ onMounted(() => {
   }
   requestTreeData();
   document.addEventListener("click", onGlobalClick);
+  window.addEventListener("keydown", trackTabKeyDown);
+  window.addEventListener("keyup", trackTabKeyUp);
+  window.addEventListener("blur", clearTabKeyState);
 });
 onUnmounted(() => {
   document.removeEventListener("click", onGlobalClick);
+  window.removeEventListener("keydown", trackTabKeyDown);
+  window.removeEventListener("keyup", trackTabKeyUp);
+  window.removeEventListener("blur", clearTabKeyState);
 });
 </script>
 
@@ -900,11 +1321,71 @@ onUnmounted(() => {
   height: var(--tree_height);
   color: #fff;
 }
+.comparison-tabs-bar {
+  position: absolute;
+  z-index: 100;
+  top: 0;
+  left: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 56px);
+  min-height: 46px;
+  padding: 6px 18px;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(22, 29, 35, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0 0 18px 18px;
+  backdrop-filter: blur(10px);
+}
+.comparison-tabs-title {
+  flex: 0 0 auto;
+  padding-left: 4px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.58);
+}
+.comparison-tabs-clear {
+  font-size: 14px;
+  user-select: none;
+  cursor: pointer;
+  color: rgba(255,255,255,0.6);
+  flex: 0 0 auto;
+}
+.comparison-tabs-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(188, 199, 213, 0.56) transparent;
+  overscroll-behavior-x: contain;
+}
+.comparison-tabs-scroll::-webkit-scrollbar {
+  height: 3px;
+}
+.comparison-tabs-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.comparison-tabs-scroll::-webkit-scrollbar-thumb {
+  background: rgba(188, 199, 213, 0.44);
+  border-radius: 999px;
+}
+.comparison-tabs-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(235, 241, 250, 0.72);
+}
+.comparison-tabs-scroll :deep(.cir-tabs) {
+  min-width: 100%;
+}
+.comparison-tabs-clear:hover {
+  color: #fff;
+}
 .screenshot-state.container-main,
 .screenshot-state .wt-tree {
   height: auto;
 }
 .container-main:not(.screenshot-state) .tree-area {
+  padding-top: 65px;
   height: var(--tree_height);
   overflow: auto;
   transform: none;
@@ -1019,6 +1500,25 @@ onUnmounted(() => {
   padding: 1px 17px 0 8px;
   height: 28px;
   position: relative;
+}
+.func-button {
+  width: 30px;
+  text-align: center;
+  border-radius: 10px 0 0 10px;
+  line-height: 18px;
+  background-color: rgba(26, 33, 45, 0.8);
+  padding: 10px 3px;
+  font-size: 14px;
+  margin: 5px 0;
+  cursor: pointer;
+  user-select: none;
+}
+.func-button-bar {
+  top: 50%;
+  transform: translate(0, -50%);
+}
+.func-button:hover {
+  background-color: rgba(51, 63, 85, 0.8);
 }
 </style>
 

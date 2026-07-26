@@ -1,19 +1,27 @@
 {
-  "name": "RP-Calculator - 战争雷霆研发点计算器",
+  "name": "RP-Calculator - 战争雷霆研发计算器",
   "short_name": "RP-Calculator",
   "description": "面向 War Thunder 战争雷霆玩家的研发点计算器与科技树路线规划工具。",
   "lang": "zh-CN",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone"],
+  "orientation": "any",
   "background_color": "#14191b",
   "theme_color": "#14191b",
   "icons": [
     {
-      "src": "/favicon.ico",
-      "sizes": "16x16 32x32 48x48",
-      "type": "image/x-icon",
-      "purpose": "any"
+      "src": "/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

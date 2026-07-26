@@ -131,70 +131,25 @@ for (const countryCode of countries) {
 
       assertValidPlan(plan, treeData, targetId, unlockQuantityMap);
 
-      const targetColumn = plan.graph.research.get(targetId).columnIndex;
       const targetRankIndex = plan.graph.research.get(targetId).rankIndex;
       const plannedPremiumId = findPremiumBelowTarget(
         treeData,
         targetRankIndex,
       );
-      const maxColumns = Math.max(
-        ...treeData.map(
-          (rank) => rank.researchable_vehicles?.length || 0,
-        ),
-      );
-      const priorityColumn = Array.from(
-        { length: maxColumns },
-        (_, index) => index,
-      ).find((index) => index !== targetColumn);
-
-      if (priorityColumn != null) {
-        const priorityPlan = planShortestResearchPath({
+      if (plannedPremiumId) {
+        const premiumPlan = planShortestResearchPath({
           treeData,
           targetIds: [targetId],
-          plannedPremiumIds: plannedPremiumId ? [plannedPremiumId] : [],
+          plannedPremiumIds: [plannedPremiumId],
           unlockQuantityMap,
           terminalVehicles: terminal_vehicles,
           countryCode,
           vehicleType,
-          priorityColumns: [priorityColumn],
         });
 
-        assertValidPlan(priorityPlan, treeData, targetId, unlockQuantityMap);
-        assert.equal(priorityPlan.mode, "priority");
-        assert.equal(priorityPlan.searchComplete, true);
-        if (plannedPremiumId) {
-          assert.equal(priorityPlan.premiumIds.includes(plannedPremiumId), true);
-        }
-
-        const ownedResearchId = plan.selectedIds.find((id) => {
-          const entry = plan.graph.research.get(id);
-          return entry && entry.rankIndex > 0 && id !== targetId;
-        });
-        const multiTargets = findTopRankTargets(treeData).slice(0, 2);
-
-        if (ownedResearchId && multiTargets.length > 1) {
-          const ownedPlan = planShortestResearchPath({
-            treeData,
-            targetIds: multiTargets,
-            ownedResearchIds: [ownedResearchId],
-            plannedPremiumIds: plannedPremiumId
-              ? [plannedPremiumId]
-              : [],
-            unlockQuantityMap,
-            terminalVehicles: terminal_vehicles,
-            countryCode,
-            vehicleType,
-            priorityColumns: [priorityColumn],
-          });
-
-          assertValidPlan(
-            ownedPlan,
-            treeData,
-            multiTargets[0],
-            unlockQuantityMap,
-          );
-          assert.equal(ownedPlan.selectedIds.includes(ownedResearchId), false);
-        }
+        assertValidPlan(premiumPlan, treeData, targetId, unlockQuantityMap);
+        assert.equal(premiumPlan.searchComplete, true);
+        assert.equal(premiumPlan.premiumIds.includes(plannedPremiumId), true);
       }
     });
   }
@@ -285,13 +240,12 @@ test("owned researchable vehicles cut dependencies and are excluded from output"
   assert.equal(plan.totalSp, 3);
 });
 
-test("china aviation priority does not extend an already unlocked rank", () => {
+test("china aviation planning does not extend an already unlocked rank", () => {
   const treeData = loadTree("china", "aviation");
   const plan = planShortestResearchPath({
     treeData,
     targetIds: ["j_15t"],
     plannedPremiumIds: ["jh_7a_prototype"],
-    priorityColumns: [1],
     unlockQuantityMap: unlock_quantitys.china.aviation,
     terminalVehicles: terminal_vehicles,
     countryCode: "china",
@@ -312,7 +266,7 @@ test("china aviation priority does not extend an already unlocked rank", () => {
   assert.equal(plan.premiumIds.includes("jh_7a_prototype"), true);
 });
 
-test("china ground priority planning keeps the exact minimum-RP result", () => {
+test("china ground planning keeps owned vehicles out of new research costs", () => {
   const treeData = loadTree("china", "ground");
   const params = {
     treeData,
@@ -324,15 +278,10 @@ test("china ground priority planning keeps the exact minimum-RP result", () => {
     countryCode: "china",
     vehicleType: "ground",
   };
-  const plan = planShortestResearchPath({
-    ...params,
-    priorityColumns: [1],
-  });
-  const unprioritizedPlan = planShortestResearchPath(params);
+  const plan = planShortestResearchPath(params);
 
   assert.equal(plan.ok, true, plan.warnings.join("\n"));
   assert.equal(plan.searchComplete, true);
-  assert.equal(plan.totalRp, unprioritizedPlan.totalRp);
   assert.equal(plan.selectedIds.includes("cn_zts_63_1980"), false);
   assert.equal(plan.rankCounts[4], 5);
 });
@@ -371,7 +320,6 @@ test("exact minimum-RP search matches exhaustive enumeration", () => {
   const plan = planShortestResearchPath({
     treeData,
     targetIds: ["target"],
-    priorityColumns: [2],
     unlockQuantityMap: requirements,
     terminalVehicles: {},
     countryCode: "test",
@@ -395,42 +343,160 @@ test("exact minimum-RP search matches exhaustive enumeration", () => {
 
     const counts = new Array(treeData.length).fill(0);
     let rp = 0;
-    let priorityScore = 0;
     for (const id of selected) {
       const entry = plan.graph.research.get(id);
       counts[entry.rankIndex]++;
       rp += entry.rp;
-      if (entry.rankIndex < 2 && entry.columnIndex === 2) priorityScore++;
     }
     if (counts[0] < requirements.I || counts[1] < requirements.II) continue;
 
-    const candidate = { rp, priorityScore };
-    if (
-      !exhaustiveBest ||
-      candidate.rp < exhaustiveBest.rp ||
-      (candidate.rp === exhaustiveBest.rp &&
-        candidate.priorityScore > exhaustiveBest.priorityScore)
-    ) {
-      exhaustiveBest = candidate;
-    }
+    if (!exhaustiveBest || rp < exhaustiveBest.rp) exhaustiveBest = { rp };
   }
 
   assert.equal(plan.ok, true);
   assert.equal(plan.searchComplete, true);
-  assert.deepEqual(
-    {
-      rp: plan.totalRp,
-      priorityScore: plan.priorityScore,
-    },
-    exhaustiveBest,
-  );
+  assert.equal(plan.totalRp, exhaustiveBest.rp);
   assert.equal(
     plan.warnings.some((warning) => /iteration limit/i.test(warning)),
     false,
   );
 });
 
-test("priority ignores SP when minimum-RP routes are tied", () => {
+test("waypoints are mandatory and the route remains minimum-RP under that constraint", () => {
+  const treeData = [
+    {
+      rank: "I",
+      researchable_vehicles: [
+        [{ type: "single", data_unit_id: "dependency", rp: 10, sp: 1 }],
+        [{ type: "single", data_unit_id: "cheap_filler", rp: 5, sp: 1 }],
+        [{ type: "single", data_unit_id: "waypoint", rp: 50, sp: 99 }],
+      ],
+      premium_vehicles: [],
+    },
+    {
+      rank: "II",
+      researchable_vehicles: [
+        [{ type: "single", data_unit_id: "target", rp: 20, sp: 2 }],
+        [],
+        [],
+      ],
+      premium_vehicles: [],
+    },
+  ];
+  const params = {
+    treeData,
+    targetIds: ["target"],
+    unlockQuantityMap: { I: 2, II: 0 },
+    terminalVehicles: {},
+    countryCode: "test",
+    vehicleType: "ground",
+  };
+
+  const baseline = planShortestResearchPath(params);
+  const throughWaypoint = planShortestResearchPath({
+    ...params,
+    waypointIds: ["waypoint"],
+  });
+
+  assert.equal(baseline.ok, true);
+  assert.deepEqual(
+    new Set(baseline.selectedIds),
+    new Set(["dependency", "cheap_filler", "target"]),
+  );
+  assert.equal(baseline.totalRp, 35);
+
+  assert.equal(throughWaypoint.ok, true);
+  assert.equal(throughWaypoint.selectedIds.includes("waypoint"), true);
+  assert.equal(throughWaypoint.selectedIds.includes("cheap_filler"), false);
+  assert.equal(throughWaypoint.totalRp, 80);
+  assert.deepEqual(throughWaypoint.waypointIds, ["waypoint"]);
+});
+
+test("a waypoint forces its prerequisite chain and validates invalid IDs", () => {
+  const treeData = [
+    {
+      rank: "I",
+      researchable_vehicles: [
+        [{ type: "single", data_unit_id: "waypoint_dependency", rp: 10, sp: 1 }],
+        [{ type: "single", data_unit_id: "target_dependency", rp: 1, sp: 1 }],
+      ],
+      premium_vehicles: [],
+    },
+    {
+      rank: "II",
+      researchable_vehicles: [
+        [{ type: "single", data_unit_id: "waypoint", rp: 20, sp: 2 }],
+        [{ type: "single", data_unit_id: "target", rp: 30, sp: 3 }],
+      ],
+      premium_vehicles: [],
+    },
+  ];
+
+  const plan = planShortestResearchPath({
+    treeData,
+    targetIds: ["target"],
+    waypointIds: ["waypoint", "missing_waypoint"],
+    unlockQuantityMap: { I: 1, II: 0 },
+    terminalVehicles: {},
+    countryCode: "test",
+    vehicleType: "ground",
+  });
+
+  assert.equal(plan.ok, true);
+  assert.equal(plan.selectedIds.includes("waypoint"), true);
+  assert.equal(plan.selectedIds.includes("waypoint_dependency"), true);
+  assert.ok(
+    plan.warnings.includes("Waypoint is not a researchable vehicle: missing_waypoint"),
+  );
+});
+
+test("a higher-rank waypoint applies its own rank unlock requirements", () => {
+  const treeData = [
+    {
+      rank: "I",
+      researchable_vehicles: [
+        [{ type: "single", data_unit_id: "target", rp: 1, sp: 1 }],
+        [
+          {
+            type: "single",
+            data_unit_id: "waypoint_dependency",
+            rp: 1,
+            sp: 1,
+          },
+        ],
+        [{ type: "single", data_unit_id: "required_filler", rp: 5, sp: 1 }],
+      ],
+      premium_vehicles: [],
+    },
+    {
+      rank: "II",
+      researchable_vehicles: [
+        [],
+        [{ type: "single", data_unit_id: "waypoint", rp: 1, sp: 1 }],
+        [],
+      ],
+      premium_vehicles: [],
+    },
+  ];
+
+  const plan = planShortestResearchPath({
+    treeData,
+    targetIds: ["target"],
+    waypointIds: ["waypoint"],
+    unlockQuantityMap: { I: 3, II: 0 },
+    terminalVehicles: {},
+    countryCode: "test",
+    vehicleType: "ground",
+  });
+
+  assert.equal(plan.ok, true);
+  assert.equal(plan.selectedIds.includes("waypoint"), true);
+  assert.equal(plan.selectedIds.includes("required_filler"), true);
+  assert.equal(plan.rankCounts[0], 3);
+  assert.equal(plan.totalRp, 8);
+});
+
+test("SP does not affect the stable choice between equal-RP routes", () => {
   const treeData = [
     {
       rank: "I",
@@ -455,7 +521,6 @@ test("priority ignores SP when minimum-RP routes are tied", () => {
   const plan = planShortestResearchPath({
     treeData,
     targetIds: ["target"],
-    priorityColumns: [2],
     unlockQuantityMap: { I: 2, II: 0 },
     terminalVehicles: {},
     countryCode: "test",
@@ -464,12 +529,12 @@ test("priority ignores SP when minimum-RP routes are tied", () => {
 
   assert.equal(plan.ok, true);
   assert.equal(plan.totalRp, 35);
-  assert.equal(plan.selectedIds.includes("preferred"), true);
-  assert.equal(plan.selectedIds.includes("low_sp"), false);
-  assert.equal(plan.totalSp, 1029);
+  assert.equal(plan.selectedIds.includes("preferred"), false);
+  assert.equal(plan.selectedIds.includes("low_sp"), true);
+  assert.equal(plan.totalSp, 31);
 });
 
-test("priority follows the provided column order when RP and vehicle count are tied", () => {
+test("equal-RP routes use stable tree order when no other condition distinguishes them", () => {
   const treeData = [
     {
       rank: "I",
@@ -494,7 +559,6 @@ test("priority follows the provided column order when RP and vehicle count are t
   const plan = planShortestResearchPath({
     treeData,
     targetIds: ["target"],
-    priorityColumns: [2, 1],
     unlockQuantityMap: { I: 2, II: 0 },
     terminalVehicles: {},
     countryCode: "test",
@@ -502,12 +566,11 @@ test("priority follows the provided column order when RP and vehicle count are t
   });
 
   assert.equal(plan.ok, true);
-  assert.equal(plan.selectedIds.includes("first_choice"), true);
-  assert.equal(plan.selectedIds.includes("second_choice"), false);
-  assert.deepEqual(plan.priorityVector, [1, 0]);
+  assert.equal(plan.selectedIds.includes("first_choice"), false);
+  assert.equal(plan.selectedIds.includes("second_choice"), true);
 });
 
-test("priority does not add optional zero-RP vehicles just to increase preference hits", () => {
+test("minimum-RP routes do not add optional zero-RP vehicles", () => {
   const treeData = [
     {
       rank: "I",
@@ -538,7 +601,6 @@ test("priority does not add optional zero-RP vehicles just to increase preferenc
   const plan = planShortestResearchPath({
     treeData,
     targetIds: ["target"],
-    priorityColumns: [0],
     unlockQuantityMap: { I: 1, II: 1, III: 0 },
     terminalVehicles: {},
     countryCode: "test",
@@ -549,35 +611,6 @@ test("priority does not add optional zero-RP vehicles just to increase preferenc
   assert.equal(plan.totalRp, 60);
   assert.equal(plan.selectedIds.includes("optional_zero"), false);
   assert.deepEqual(plan.selectedIds, ["rank1", "rank2", "target"]);
-});
-
-test("ussr aviation priority route does not add unrelated first-column vehicles", () => {
-  const treeData = loadTree("ussr", "aviation");
-  const params = {
-    treeData,
-    targetIds: ["su_30sm2", "su_34"],
-    unlockQuantityMap: unlock_quantitys.ussr.aviation,
-    terminalVehicles: terminal_vehicles,
-    countryCode: "ussr",
-    vehicleType: "aviation",
-  };
-  const baseline = planShortestResearchPath(params);
-  const priorityPlan = planShortestResearchPath({
-    ...params,
-    priorityColumns: [3],
-  });
-  const selectedColumns = new Set(
-    priorityPlan.selectedIds.map(
-      (id) => priorityPlan.graph.research.get(id).columnIndex,
-    ),
-  );
-
-  assert.equal(priorityPlan.ok, true);
-  assert.equal(priorityPlan.mode, "priority");
-  assert.equal(priorityPlan.totalRp, baseline.totalRp);
-  assert.equal(priorityPlan.selectedIds.length, baseline.selectedIds.length);
-  assert.equal(selectedColumns.has(0), false);
-  assert.equal(selectedColumns.has(1), false);
 });
 
 test("ignore multiple uses only the first folded vehicle as a filler", () => {
@@ -622,19 +655,12 @@ test("ignore multiple uses only the first folded vehicle as a filler", () => {
     ...params,
     ignoreMultiple: true,
   });
-  const ignoredPriorityPlan = planShortestResearchPath({
-    ...params,
-    priorityColumns: [1],
-    ignoreMultiple: true,
-  });
 
   assert.equal(normalPlan.selectedIds.includes("a1_extra"), true);
   assert.equal(normalPlan.selectedIds.includes("b1"), false);
   assert.equal(ignoredPlan.selectedIds.includes("a1_extra"), false);
   assert.equal(ignoredPlan.selectedIds.includes("b1"), true);
   assert.equal(ignoredPlan.searchComplete, true);
-  assert.equal(ignoredPriorityPlan.selectedIds.includes("a1_extra"), false);
-  assert.equal(ignoredPriorityPlan.selectedIds.includes("b1"), true);
 });
 
 test("ignore multiple keeps every initial Rank-I zero-RP folded vehicle", () => {
@@ -680,7 +706,7 @@ test("ignore multiple keeps every initial Rank-I zero-RP folded vehicle", () => 
   assert.equal(plan.rankCounts[0], 2);
 });
 
-test("large ground and aviation matrix has valid and irreducible priority routes", () => {
+test("large ground and aviation matrix has valid and irreducible shortest routes", () => {
   let scenarioCount = 0;
 
   for (const countryCode of countries) {
@@ -711,93 +737,60 @@ test("large ground and aviation matrix has valid and irreducible priority routes
         treeData,
         targetRankIndex,
       );
-      const maxColumns = Math.max(
-        ...treeData.map(
-          (rank) => rank.researchable_vehicles?.length || 0,
-        ),
-      );
       const targetSets = topTargets.map((id) => [id]);
       if (topTargets.length > 1) {
         targetSets.push([topTargets[0], topTargets.at(-1)]);
       }
 
       for (const targetIds of targetSets) {
-        const targetColumns = new Set(
-          targetIds.map(
-            (id) => baseline.graph.research.get(id).columnIndex,
-          ),
-        );
-        const priorityColumns = Array.from(
-          { length: maxColumns },
-          (_, index) => index,
-        )
-          .filter((index) => !targetColumns.has(index))
-          .slice(0, 2);
+        const plan = planShortestResearchPath({
+          treeData,
+          targetIds,
+          ownedResearchIds,
+          plannedPremiumIds: plannedPremiumId ? [plannedPremiumId] : [],
+          unlockQuantityMap,
+          terminalVehicles: terminal_vehicles,
+          countryCode,
+          vehicleType,
+        });
+        const label = `${countryCode} ${vehicleType} targets=${targetIds.join(",")}`;
 
-        for (const priorityColumn of priorityColumns) {
-          const plan = planShortestResearchPath({
-            treeData,
-            targetIds,
-            ownedResearchIds,
-            plannedPremiumIds: plannedPremiumId
-              ? [plannedPremiumId]
-              : [],
-            priorityColumns: [priorityColumn],
-            unlockQuantityMap,
-            terminalVehicles: terminal_vehicles,
-            countryCode,
-            vehicleType,
-          });
-          const label = `${countryCode} ${vehicleType} targets=${targetIds.join(",")} priority=${priorityColumn}`;
-
-          assertValidPlan(
-            plan,
-            treeData,
-            targetIds[0],
-            unlockQuantityMap,
-          );
-          assert.equal(plan.mode, "priority", label);
-          for (const ownedId of ownedResearchIds) {
-            assert.equal(plan.selectedIds.includes(ownedId), false, label);
-          }
-
-          const selected = new Set(plan.selectedIds);
-          const protectedIds = new Set([
-            ...targetIds,
-            ...ownedResearchIds,
-            ...[...plan.graph.research.values()]
-              .filter((entry) => entry.rankIndex === 0 && entry.rp === 0)
-              .map((entry) => entry.id),
-          ]);
-          const requiredAsDependency = new Set();
-          for (const id of selected) {
-            for (const dependencyId of plan.graph.deps.get(id) || []) {
-              if (selected.has(dependencyId)) {
-                requiredAsDependency.add(dependencyId);
-              }
-            }
-          }
-
-          for (const id of selected) {
-            const entry = plan.graph.research.get(id);
-            if (
-              !protectedIds.has(id) &&
-              !requiredAsDependency.has(id)
-            ) {
-              const required =
-                unlockQuantityMap[treeData[entry.rankIndex].rank] || 0;
-              assert.ok(
-                plan.rankCounts[entry.rankIndex] <= required,
-                `${label}: redundant ${id} remains in rank ${entry.rank}`,
-              );
-            }
-          }
-
-          scenarioCount++;
+        assertValidPlan(plan, treeData, targetIds[0], unlockQuantityMap);
+        for (const ownedId of ownedResearchIds) {
+          assert.equal(plan.selectedIds.includes(ownedId), false, label);
         }
+
+        const selected = new Set(plan.selectedIds);
+        const protectedIds = new Set([
+          ...targetIds,
+          ...ownedResearchIds,
+          ...[...plan.graph.research.values()]
+            .filter((entry) => entry.rankIndex === 0 && entry.rp === 0)
+            .map((entry) => entry.id),
+        ]);
+        const requiredAsDependency = new Set();
+        for (const id of selected) {
+          for (const dependencyId of plan.graph.deps.get(id) || []) {
+            if (selected.has(dependencyId)) requiredAsDependency.add(dependencyId);
+          }
+        }
+
+        for (const id of selected) {
+          const entry = plan.graph.research.get(id);
+          if (!protectedIds.has(id) && !requiredAsDependency.has(id)) {
+            const required =
+              unlockQuantityMap[treeData[entry.rankIndex].rank] || 0;
+            assert.ok(
+              plan.rankCounts[entry.rankIndex] <= required,
+              `${label}: redundant ${id} remains in rank ${entry.rank}`,
+            );
+          }
+        }
+
+        scenarioCount++;
       }
     }
   }
 
-  assert.ok(scenarioCount >= 100, `only ran ${scenarioCount} scenarios`);
+  assert.ok(scenarioCount >= 60, `only ran ${scenarioCount} scenarios`);
 });

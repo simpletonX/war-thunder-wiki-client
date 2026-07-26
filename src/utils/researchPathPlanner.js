@@ -9,11 +9,6 @@ function parseCost(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
-function getPriority(columnIndex, priorityColumns) {
-  const index = priorityColumns.indexOf(columnIndex);
-  return index === -1 ? 9999 : index;
-}
-
 function hasArrowToNext(root, terminalVehicles, countryCode, vehicleType) {
   if (!root?.data_unit_id) return false;
 
@@ -45,13 +40,10 @@ function buildGraph({
   terminalVehicles,
   countryCode,
   vehicleType,
-  priorityColumns,
 }) {
-  const hasPriorityColumns = priorityColumns.length > 0;
   const research = new Map();
   const premium = new Map();
   const deps = new Map();
-  const byRank = new Map();
   const maxColumns = Math.max(
     0,
     ...treeData.map((rankBlock) => rankBlock.researchable_vehicles?.length || 0),
@@ -59,8 +51,6 @@ function buildGraph({
 
   const addResearch = (entry) => {
     research.set(entry.id, entry);
-    if (!byRank.has(entry.rankIndex)) byRank.set(entry.rankIndex, []);
-    byRank.get(entry.rankIndex).push(entry);
     if (!deps.has(entry.id)) deps.set(entry.id, []);
   };
 
@@ -84,7 +74,6 @@ function buildGraph({
     childIndex,
     rp: parseCost(item.rp),
     sp: parseCost(item.sp),
-    priority: getPriority(columnIndex, priorityColumns),
   });
 
   for (let columnIndex = 0; columnIndex < maxColumns; columnIndex++) {
@@ -176,29 +165,7 @@ function buildGraph({
     });
   });
 
-  for (const entries of byRank.values()) {
-    entries.sort((a, b) => {
-      if (!hasPriorityColumns) {
-        if (a.rp !== b.rp) return a.rp - b.rp;
-        if (a.columnIndex !== b.columnIndex) {
-          return a.columnIndex - b.columnIndex;
-        }
-        if (a.rowIndex !== b.rowIndex) return a.rowIndex - b.rowIndex;
-        return (a.childIndex ?? -1) - (b.childIndex ?? -1);
-      }
-
-      if (a.priority !== b.priority) return a.priority - b.priority;
-      if (a.columnIndex !== b.columnIndex) return a.columnIndex - b.columnIndex;
-      if (a.rowIndex !== b.rowIndex) return a.rowIndex - b.rowIndex;
-      if ((a.childIndex ?? -1) !== (b.childIndex ?? -1)) {
-        return (a.childIndex ?? -1) - (b.childIndex ?? -1);
-      }
-
-      return 0;
-    });
-  }
-
-  return { research, premium, deps, byRank };
+  return { research, premium, deps };
 }
 
 function createClosureGetter(deps, warnings, ownedIds = new Set()) {
@@ -257,29 +224,21 @@ export function planShortestResearchPath({
   terminalVehicles,
   countryCode,
   vehicleType,
-  priorityColumns = [],
+  waypointIds = [],
   ignoreMultiple = false,
 }) {
   const warnings = [];
   const normalizedTargets = targetIds.map(toId).filter(Boolean);
+  const normalizedWaypoints = [
+    ...new Set(waypointIds.map(toId).filter(Boolean)),
+  ];
   const normalizedPremiums = plannedPremiumIds.map(toId).filter(Boolean);
   const normalizedOwnedIds = ownedResearchIds.map(toId).filter(Boolean);
-  const normalizedPriorityColumns = [
-    ...new Set(
-      priorityColumns
-        .map((columnIndex) => Number(columnIndex))
-        .filter((columnIndex) => Number.isInteger(columnIndex)),
-    ),
-  ];
-  const searchMode =
-    normalizedPriorityColumns.length > 0 ? "priority" : "min-rp";
-
   const graph = buildGraph({
     treeData,
     terminalVehicles,
     countryCode,
     vehicleType,
-    priorityColumns: normalizedPriorityColumns,
   });
   const ownedIds = new Set();
   for (const id of normalizedOwnedIds) {
@@ -295,6 +254,11 @@ export function planShortestResearchPath({
     warnings.push(`Target is not a researchable vehicle: ${id}`);
     return false;
   });
+  const validWaypointIds = normalizedWaypoints.filter((id) => {
+    if (graph.research.has(id)) return true;
+    warnings.push(`Waypoint is not a researchable vehicle: ${id}`);
+    return false;
+  });
 
   if (!validTargetIds.length) {
     return {
@@ -306,16 +270,20 @@ export function planShortestResearchPath({
       rankCounts: new Array(treeData.length).fill(0),
       warnings: [...warnings, "No valid research target was provided."],
       graph,
-      mode: searchMode,
-      priorityScore: 0,
       searchComplete: true,
       ownedIds: [...ownedIds],
+      waypointIds: validWaypointIds,
     };
   }
 
+  // 途径点与目标载具一样属于本次路线的强制节点。若途径点所在
+  // Rank 更高，也必须按它的 Rank 计算前置等级开放条件。
+  const requiredRouteIds = [
+    ...new Set([...validTargetIds, ...validWaypointIds]),
+  ];
   const targetRankIndex = Math.max(
     -1,
-    ...validTargetIds
+    ...requiredRouteIds
       .map((id) => graph.research.get(id)?.rankIndex)
       .filter((value) => typeof value === "number"),
   );
@@ -354,6 +322,10 @@ export function planShortestResearchPath({
     for (const depId of getClosure(id)) initialSelected.add(depId);
   }
 
+  for (const id of validWaypointIds) {
+    for (const depId of getClosure(id)) initialSelected.add(depId);
+  }
+
   const countRanks = (selectedIds) => {
     const counts = [...premiumCounts];
 
@@ -382,9 +354,6 @@ export function planShortestResearchPath({
 
   const initialCounts = countRanks(initialSelected);
   const researchIdsOf = (ids) => [...ids].filter((id) => !ownedIds.has(id));
-  const priorityColumnIndexMap = new Map(
-    normalizedPriorityColumns.map((columnIndex, index) => [columnIndex, index]),
-  );
   const isIgnoredMultipleFiller = (entry) =>
     ignoreMultiple && entry?.childIndex != null && entry.childIndex > 0;
 
@@ -394,8 +363,8 @@ export function planShortestResearchPath({
    * 研发依赖图由 buildGraph 构造成列内森林：每个节点最多有一个前置
    * 节点，不同根节点之间没有依赖。对每棵依赖树枚举“选择/不选择”并按
    * 各 Rank 已满足数量压缩状态，再合并所有根节点。相同计数状态只保留
-   * 最少 RP 解；如果 RP 完全相同，先保留选择数量更少的路线，避免 0 RP
-   * 载具被列偏好额外带入；数量也相同时，再按用户传入的列偏好顺序比较。
+   * 最少 RP 解；如果 RP 完全相同，保留选择数量更少的路线，避免不必要的
+   * 0 RP 载具被带入。仍无法区分时，使用固定的科技树顺序保持结果稳定。
    */
   const solveExactMinimumRoute = () => {
     const entries = [...graph.research.values()];
@@ -423,33 +392,16 @@ export function planShortestResearchPath({
     }
 
     const zeroCounts = () => new Array(requirements.length).fill(0);
-    const zeroPriorityVector = () =>
-      new Array(normalizedPriorityColumns.length).fill(0);
     const capCounts = (counts) =>
       counts.map((count, rankIndex) =>
         Math.min(count, requirements[rankIndex]),
       );
     const countsKey = (counts) => counts.join(",");
-    const comparePriorityVector = (candidate, current) => {
-      for (let index = 0; index < candidate.length; index++) {
-        if (candidate[index] !== current[index]) {
-          return candidate[index] > current[index] ? -1 : 1;
-        }
-      }
-      return 0;
-    };
     const isBetter = (candidate, current) => {
       if (!current) return true;
       if (candidate.rp !== current.rp) return candidate.rp < current.rp;
       if (candidate.vehicleCount !== current.vehicleCount) {
         return candidate.vehicleCount < current.vehicleCount;
-      }
-      const priorityComparison = comparePriorityVector(
-        candidate.priorityVector,
-        current.priorityVector,
-      );
-      if (priorityComparison !== 0) {
-        return priorityComparison < 0;
       }
       return candidate.mask < current.mask;
     };
@@ -472,9 +424,6 @@ export function planShortestResearchPath({
             counts,
             rp: left.rp + right.rp,
             vehicleCount: left.vehicleCount + right.vehicleCount,
-            priorityVector: left.priorityVector.map(
-              (count, index) => count + right.priorityVector[index],
-            ),
             mask: left.mask | right.mask,
           });
         }
@@ -504,7 +453,6 @@ export function planShortestResearchPath({
           counts: zeroCounts(),
           rp: 0,
           vehicleCount: 0,
-          priorityVector: zeroPriorityVector(),
           mask: 0n,
         });
         subtreeCache.set(id, skippedStates);
@@ -517,21 +465,11 @@ export function planShortestResearchPath({
         requirements[entry.rankIndex],
       );
       const isOwned = ownedIds.has(id);
-      const priorityVector = zeroPriorityVector();
-      const priorityIndex = priorityColumnIndexMap.get(entry.columnIndex);
-      if (
-        !isOwned &&
-        entry.rankIndex < targetRankIndex &&
-        priorityIndex != null
-      ) {
-        priorityVector[priorityIndex] = 1;
-      }
       let selectedStates = new Map();
       addState(selectedStates, {
         counts: nodeCounts,
         rp: isOwned ? 0 : entry.rp,
         vehicleCount: 1,
-        priorityVector,
         mask: 1n << BigInt(entryIndex.get(id)),
       });
 
@@ -544,7 +482,6 @@ export function planShortestResearchPath({
           counts: zeroCounts(),
           rp: 0,
           vehicleCount: 0,
-          priorityVector: zeroPriorityVector(),
           mask: 0n,
         });
       }
@@ -559,7 +496,6 @@ export function planShortestResearchPath({
       counts: premiumBaseCounts,
       rp: 0,
       vehicleCount: 0,
-      priorityVector: zeroPriorityVector(),
       mask: 0n,
     });
 
@@ -582,11 +518,9 @@ export function planShortestResearchPath({
           "No valid route satisfies rank requirements and dependencies.",
         ],
         graph,
-        mode: searchMode,
-        priorityScore: 0,
-        priorityVector: zeroPriorityVector(),
         searchComplete: true,
         ownedIds: [...ownedIds],
+        waypointIds: validWaypointIds,
       };
     }
 
@@ -606,11 +540,9 @@ export function planShortestResearchPath({
       rankCounts: finalCounts,
       warnings,
       graph,
-      mode: searchMode,
-      priorityScore: best.priorityVector.reduce((sum, count) => sum + count, 0),
-      priorityVector: best.priorityVector,
       searchComplete: true,
       ownedIds: [...ownedIds],
+      waypointIds: validWaypointIds,
     };
   };
 

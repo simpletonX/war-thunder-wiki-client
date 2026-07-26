@@ -39,12 +39,8 @@ const emits = defineEmits(["update:modelValue"]);
 
 <style scoped>
 .public-loading {
-  background-color: rgba(0, 0, 0, 0.6);
+  background-color: rgba(0, 0, 0, 0.82);
   z-index: 9999;
-  backdrop-filter: blur(0);
-}
-.public-loading.show {
-  backdrop-filter: blur(20px);
 }
 .loading-icon-bg {
   position: absolute;
